@@ -1,0 +1,16 @@
+{
+    "buildCommand": "cd frontend && npm install && npm run build",
+    "outputDirectory": "frontend/dist",
+    "installCommand": "cd frontend && npm install",
+    "framework": null,
+    "rewrites": [
+        {
+            "source": "/kakao-api/(.*)",
+            "destination": "https://dapi.kakao.com/$1"
+        },
+        {
+            "source": "/vworld-api/(.*)",
+            "destination": "https://api.vworld.kr/$1"
+        }
+    ]
+}
