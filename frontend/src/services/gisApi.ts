@@ -7,8 +7,8 @@
  *   3. 좌표 변환: WGS84(도) → 로컬 미터(m) → 3D 렌더링
  */
 
-const KAKAO_REST_KEY = '72de5cd34b1d2979f85cdb428756c545';
-const VWORLD_API_KEY = 'B8385331-2B58-3CEF-9209-33CB9AFD68A6';
+const KAKAO_REST_KEY = process.env.KAKAO_REST_KEY || '';
+const VWORLD_API_KEY = process.env.VWORLD_API_KEY || '';
 
 // ─── 타입 정의 ───
 

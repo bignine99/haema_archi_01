@@ -6,7 +6,7 @@
  *       자동 분석하여 설계자가 인지해야 할 핵심 사항을 제공
  */
 
-const GEMINI_API_KEY = 'AIzaSyAkuPhA6QOhwyO9VvQYqWWGZPG3p0zow6c';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 

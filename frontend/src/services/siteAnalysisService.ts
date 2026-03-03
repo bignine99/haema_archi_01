@@ -9,70 +9,70 @@
  * 5. 종합 분석 및 디자인 전략 도출
  */
 
-const GEMINI_API_KEY = 'AIzaSyAkuPhA6QOhwyO9VvQYqWWGZPG3p0zow6c';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
 // ────── 입력 타입 ──────
 export interface SiteAnalysisInput {
-    projectName: string;
-    address: string;
-    zoneType: string;
-    buildingUse: string;
-    landArea: number;
-    grossFloorArea: number;
-    totalFloors: number;
-    maxHeight: number;
-    buildingCoverageLimit: number;
-    floorAreaRatioLimit: number;
-    certifications: string[];
-    roadWidth: number;
-    northAngle: number;
-    rawText?: string;
+  projectName: string;
+  address: string;
+  zoneType: string;
+  buildingUse: string;
+  landArea: number;
+  grossFloorArea: number;
+  totalFloors: number;
+  maxHeight: number;
+  buildingCoverageLimit: number;
+  floorAreaRatioLimit: number;
+  certifications: string[];
+  roadWidth: number;
+  northAngle: number;
+  rawText?: string;
 }
 
 // ────── 출력 타입 ──────
 export interface AnalysisItem {
-    title: string;
-    content: string;
-    importance: 'critical' | 'high' | 'medium' | 'low';
+  title: string;
+  content: string;
+  importance: 'critical' | 'high' | 'medium' | 'low';
 }
 
 export interface AnalysisSection {
-    id: string;
-    title: string;
-    icon: string;
-    items: AnalysisItem[];
-    summary: string;
+  id: string;
+  title: string;
+  icon: string;
+  items: AnalysisItem[];
+  summary: string;
 }
 
 export interface SwotItem {
-    category: 'strength' | 'weakness' | 'opportunity' | 'threat';
-    items: string[];
+  category: 'strength' | 'weakness' | 'opportunity' | 'threat';
+  items: string[];
 }
 
 export interface DesignStrategy {
-    title: string;
-    description: string;
-    priority: 'high' | 'medium' | 'low';
+  title: string;
+  description: string;
+  priority: 'high' | 'medium' | 'low';
 }
 
 export interface SiteAnalysisResult {
-    sections: AnalysisSection[];
-    swot: SwotItem[];
-    designStrategies: DesignStrategy[];
-    massRecommendations: string[];
-    certChecklist: string[];
-    analyzedAt: string;
+  sections: AnalysisSection[];
+  swot: SwotItem[];
+  designStrategies: DesignStrategy[];
+  massRecommendations: string[];
+  certChecklist: string[];
+  analyzedAt: string;
 }
 
 // ────── Gemini 프롬프트 ──────
 function buildPrompt(info: SiteAnalysisInput): string {
-    const docRef = info.rawText
-        ? `\n\n[과업지시서 원문 (처음 3000자)]\n${info.rawText.substring(0, 3000)}`
-        : '';
+  const docRef = info.rawText
+    ? `\n\n[과업지시서 원문 (처음 3000자)]\n${info.rawText.substring(0, 3000)}`
+    : '';
 
-    return `당신은 대한민국 건축설계 전문가이자 도시계획가입니다. 20년차 건축사 수준의 전문성으로 아래 프로젝트의 대지분석을 수행하세요.
+  return `당신은 대한민국 건축설계 전문가이자 도시계획가입니다. 20년차 건축사 수준의 전문성으로 아래 프로젝트의 대지분석을 수행하세요.
 
 [프로젝트 정보]
 - 사업명: ${info.projectName || '미정'}
@@ -204,60 +204,60 @@ ${docRef}`;
 
 // ────── API 호출 ──────
 export async function analyzeSite(
-    input: SiteAnalysisInput
+  input: SiteAnalysisInput
 ): Promise<SiteAnalysisResult | null> {
-    try {
-        console.log('[대지분석] Gemini AI 분석 시작...', {
-            project: input.projectName,
-            address: input.address,
-            area: input.landArea,
-        });
+  try {
+    console.log('[대지분석] Gemini AI 분석 시작...', {
+      project: input.projectName,
+      address: input.address,
+      area: input.landArea,
+    });
 
-        const prompt = buildPrompt(input);
+    const prompt = buildPrompt(input);
 
-        const response = await fetch(GEMINI_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                    temperature: 0.25,
-                    maxOutputTokens: 8192,
-                    responseMimeType: 'application/json',
-                },
-            }),
-        });
+    const response = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.25,
+          maxOutputTokens: 8192,
+          responseMimeType: 'application/json',
+        },
+      }),
+    });
 
-        if (!response.ok) {
-            console.error('[대지분석] API 오류:', response.status);
-            return null;
-        }
-
-        const result = await response.json();
-        const content = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        if (!content) {
-            console.error('[대지분석] 응답 없음');
-            return null;
-        }
-
-        const parsed = JSON.parse(content);
-
-        console.log('[대지분석] 분석 완료:', {
-            sections: parsed.sections?.length,
-            strategies: parsed.designStrategies?.length,
-        });
-
-        return {
-            sections: parsed.sections || [],
-            swot: parsed.swot || [],
-            designStrategies: parsed.designStrategies || [],
-            massRecommendations: parsed.massRecommendations || [],
-            certChecklist: parsed.certChecklist || [],
-            analyzedAt: new Date().toISOString(),
-        };
-    } catch (error) {
-        console.error('[대지분석] 오류:', error);
-        return null;
+    if (!response.ok) {
+      console.error('[대지분석] API 오류:', response.status);
+      return null;
     }
+
+    const result = await response.json();
+    const content = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!content) {
+      console.error('[대지분석] 응답 없음');
+      return null;
+    }
+
+    const parsed = JSON.parse(content);
+
+    console.log('[대지분석] 분석 완료:', {
+      sections: parsed.sections?.length,
+      strategies: parsed.designStrategies?.length,
+    });
+
+    return {
+      sections: parsed.sections || [],
+      swot: parsed.swot || [],
+      designStrategies: parsed.designStrategies || [],
+      massRecommendations: parsed.massRecommendations || [],
+      certChecklist: parsed.certChecklist || [],
+      analyzedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error('[대지분석] 오류:', error);
+    return null;
+  }
 }

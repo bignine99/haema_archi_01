@@ -6,7 +6,7 @@
  *       설계자가 꼭 알아야 할 핵심만 불릿 형태로 요약
  */
 
-const GEMINI_API_KEY = 'AIzaSyAkuPhA6QOhwyO9VvQYqWWGZPG3p0zow6c';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = 'gemini-2.5-flash-lite';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 

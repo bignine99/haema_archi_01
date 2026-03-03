@@ -34,8 +34,8 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - VWORLD_API_KEY=${VWORLD_API_KEY:-B8385331-2B58-3CEF-9209-33CB9AFD68A6}
-      - KAKAO_REST_KEY=${KAKAO_REST_KEY:-72de5cd34b1d2979f85cdb428756c545}
+      - VWORLD_API_KEY=${VWORLD_API_KEY}
+      - KAKAO_REST_KEY=${KAKAO_REST_KEY}
     volumes:
       - ./services/gis-service:/app       # 소스 핫 리로드
     networks:

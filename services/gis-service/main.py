@@ -17,8 +17,8 @@ from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from mock_data import MOCK_PARCELS
 
-KAKAO_REST_KEY = os.getenv("KAKAO_REST_KEY", "72de5cd34b1d2979f85cdb428756c545")
-VWORLD_API_KEY = os.getenv("VWORLD_API_KEY", "B8385331-2B58-3CEF-9209-33CB9AFD68A6")
+KAKAO_REST_KEY = os.getenv("KAKAO_REST_KEY", "")
+VWORLD_API_KEY = os.getenv("VWORLD_API_KEY", "")
 
 app = FastAPI(title="GIS Service", version="0.2.0")
 

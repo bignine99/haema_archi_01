@@ -20,9 +20,10 @@ Thumbs.db
 *.log
 webpack_log.txt
 
-# Environment
+# Environment - API 키 보호!
 .env
 .env.local
-
-# Temp
-tmp/
+.env*.local
+frontend/.env
+frontend/.env.local
+.vercel
