@@ -998,3 +998,356 @@ loadRealParcel: async (kakaoResult) => {
 | Phase 4 | 컨셉 시각화 | ⬜ 예정 |
 | Phase 5 | 면적표·실 구성 | ⬜ 예정 |
 
+---
+
+## ✅ 완료된 작업: Gemini 법규분석 서비스 + 대지분석 + 3D 매스 + 배포 (2026-03-03)
+
+### 2026-03-03 전일 작업 내용 (종일)
+
+오늘은 **6개 핵심 영역**의 대규모 작업을 수행:
+1. Gemini AI 기반 법규분석 서비스 신규 구현
+2. 법규분석 페이지 UI 전면 재구성 (2단 레이아웃 + 카드)
+3. Gemini AI 기반 대지분석 서비스 신규 구현
+4. 3D 매스 모듈 개선 (나침반, 주변건물 API, 주소검색바)
+5. Git 초기화 + GitHub 푸시 + Vercel 프로덕션 배포
+6. API 키 유출 사고 대응 + 환경변수 방식 전환
+
+---
+
+### 1. Gemini AI 법규분석 서비스 (regulationAnalysisService.ts) — 신규 생성
+
+#### 핵심 기능
+- 과업지시서에서 추출한 프로젝트 기본정보를 Gemini AI(`gemini-2.5-flash-lite`)에 전달
+- 7대 카테고리 30+ 법규를 **자동 분석**하여 리스크 등급별 카드로 표시
+- "교육연구시설(특수학교)" 프로젝트 컨텍스트를 완벽 반영
+
+#### 7대 카테고리
+| # | 카테고리 | 주요 법규 | 아이콘 |
+|---|---------|----------|--------|
+| B1 | 입지 및 도시계획 | 국토계획법, 도로법, 문화재보호법 | 🏛️ |
+| B2 | 기능 및 교통 | 주차장법, 도시교통정비촉진법 | 🚗 |
+| B3 | 안전 및 방재 | 소방시설법, 지진화산재해대책법 | 🔥 |
+| B4 | 복지 및 보건 | 장애인등편의법, 영유아보육법 | ♿ |
+| B5 | 환경 및 에너지 | 녹색건축물법, 환경영향평가법 | 🌿 |
+| B6 | 기반시설 및 기술 | 하수도법, 신재생에너지법 | ⚡ |
+| B7 | 기타 특수 법규 | 교육환경보호법, 건축물관리법 | 📋 |
+
+#### Gemini 프롬프트 설계
+```
+20년차 건축사 수준의 전문성으로 분석:
+- 프로젝트 조건에 맞는 구체적 기준/수치 명시
+- 리스크 등급: required(필수) / review(검토) / info(참고)
+- 각 항목 1~2줄 불릿 스타일, 구체적 수치 포함
+- 과업지시서 원문 참조 (최대 3000자)
+```
+
+#### 수정 파일
+| 파일 | 변경 내용 | 규모 |
+|------|----------|------|
+| `services/regulationAnalysisService.ts` | Gemini 법규분석 프롬프트 + API 호출 (신규) | **+281줄** |
+
+---
+
+### 2. 법규분석 페이지 UI 전면 재구성 (RegulationPanel.tsx v2)
+
+#### 변경 사유
+- 기존 RegulationPanel.tsx는 하드코딩된 정적 법규 테이블 (705줄)
+- 사용자 요청: Gemini AI 분석 결과를 동적으로 표시 + 2단 카드 레이아웃
+
+#### 새 구조
+```
+법규분석 페이지
+├── 상단: 프로젝트 기본정보 패널 (과업지시서 연동)
+│   ├── 사업명, 대지위치, 건폐율/용적률, 면적
+│   └── "AI 법규 종합 분석 시작" 버튼
+├── 중앙: 7대 카테고리 분석 결과 (2단 카드 레이아웃)
+│   ├── 카테고리별 접이식 카드 (Accordion)
+│   ├── 법규별 리스크 등급 색상 표시 (🔴/🟡/🔵)
+│   └── 핵심 수치 하이라이트
+└── 하단: 요약 대시보드 (필수/검토/참고 건수)
+```
+
+#### 용도 오류 수정
+- **기존**: 건축물 용도가 "오피스텔"로 하드코딩되어 있었음
+- **수정**: 과업지시서에서 추출한 "교육연구시설(특수학교)"로 동적 표시
+- Store의 `buildingUse` 필드를 참조하도록 변경
+
+#### 콘텐츠 양 대폭 증가
+- 기존: 정적 법규 테이블 4~9개 섹션
+- 변경: Gemini AI가 30+ 법규를 동적 분석, 각 항목 상세 불릿 제공
+- "법규 재분석" 버튼으로 콘텐츠 보강 가능
+
+#### 2단 카드 레이아웃
+- `grid grid-cols-1 md:grid-cols-2` 반응형 2단 배치
+- 기존 1단 구성에서 공간 활용도 대폭 개선
+
+#### 수정 파일
+| 파일 | 변경 내용 | 규모 |
+|------|----------|------|
+| `components/ui/RegulationPanel.tsx` | 전면 재작성 — Gemini 연동 + 2단 카드 UI | **전면 재작성** |
+
+---
+
+### 3. Gemini AI 대지분석 서비스 (siteAnalysisService.ts) — 신규 생성
+
+#### 핵심 기능
+- 과업지시서 + 법규분석 결과를 기반으로 5대 영역 종합 대지분석 수행
+- Gemini AI가 구체적 수치와 설계 전략을 도출
+
+#### 5대 분석 영역
+| # | 영역 | 아이콘 | 주요 분석 항목 |
+|---|------|--------|--------------|
+| S1 | 물리적·기하학적 환경 | 🏔️ | 대지형상, 경사도, 건축가능영역, 절성토 |
+| S2 | 미기후 및 환경 성능 | ☀️ | 일조, 풍향, 소음, 정온환경 배치 |
+| S3 | 인프라 및 교통 접근성 | 🚗 | 진출입, 스쿨존, BF 동선, 인입점 |
+| S4 | 인문·사회적 맥락 | 🏘️ | 조망, 지역 거점, 유사 사례 참고 |
+| S5 | 종합 분석 및 디자인 전략 | 🎯 | SWOT, 매스 배치, 인증 체크리스트 |
+
+#### 신규 타입 정의
+```typescript
+interface SiteAnalysisResult {
+    sections: AnalysisSection[];       // 5대 영역 분석 결과
+    swot: SwotItem[];                  // SWOT 분석
+    designStrategies: DesignStrategy[]; // 디자인 전략 제안
+    massRecommendations: string[];     // 매스 배치 추천
+    certChecklist: string[];           // 인증 체크리스트
+    analyzedAt: string;
+}
+```
+
+#### 대지분석 페이지 UI (SiteAnalysisPanel — App.tsx 내장)
+- 상단: 프로젝트 기본정보 + "AI 대지분석 시작" 버튼
+- 중앙: 5대 영역 분석 결과 카드 (2단 레이아웃)
+- 각 영역별 중요도 색상 표시 (critical/high/medium/low)
+- SWOT 분석 4분할 테이블
+- 디자인 전략 우선순위 리스트
+
+#### 수정 파일
+| 파일 | 변경 내용 | 규모 |
+|------|----------|------|
+| `services/siteAnalysisService.ts` | Gemini 대지분석 프롬프트 + API 호출 (신규) | **+264줄** |
+| `App.tsx` | 대지분석 renderContent 케이스 + SiteAnalysis UI 코드 | **+200줄** |
+
+---
+
+### 4. 3D 매스 모듈 개선
+
+#### 4-1. 좌측 메뉴 순서 수정
+- 3D 매스 메뉴를 좌측 사이드바 하단에서 → **대지분석 바로 다음**으로 이동
+- MENU_ITEMS 배열 순서 재배치
+
+#### 4-2. 주변 건물 API 연동 (fetchSurroundingBuildings)
+- `gisApi.ts`에 `fetchSurroundingBuildings()` 함수 추가
+- 카카오 API (카테고리 검색 + 키워드 검색) 500m 반경 내 실제 주변 건물 데이터 취득
+- `projectStore.ts`에 `realSurroundingBuildings` 상태 추가
+- `SceneViewer.tsx`에서 Mock 건물 대신 실제 건물 데이터 우선 사용
+
+#### 4-3. 나침반(Compass) 표시 수정
+- 기존 `@react-three/drei Text` 컴포넌트가 렌더링 안 되는 문제
+- `@react-three/drei Html` 컴포넌트로 교체하여 CSS 기반 렌더링
+- 'N' 라벨 빨간색으로 강조 표시
+
+#### 4-4. 헤더 주소검색바 통합
+- 기존 과업지시서 분석 페이지에만 있던 주소검색 기능을 **3D 매스 헤더**로 이동
+- `MassAddressSearch` 컴포넌트 신규 생성
+- 공통 헤더에서 `activeMenu === '3dmass'` 조건으로 검색바 표시
+- 헤더 높이 80px → 60px 축소, 콘텐츠 영역 `calc(100vh - 60px)` 조정
+- 3D 매스 뷰 내부의 중복 헤더 제거
+
+#### 수정 파일
+| 파일 | 변경 내용 | 규모 |
+|------|----------|------|
+| `App.tsx` | 메뉴 순서 변경, 헤더 주소검색바, 높이 조정, 중복 헤더 제거 | ~60줄 |
+| `services/gisApi.ts` | fetchSurroundingBuildings() 함수 추가 | +50줄 |
+| `store/projectStore.ts` | realSurroundingBuildings 상태 + loadRealParcel에서 자동 호출 | +20줄 |
+| `components/three/SceneViewer.tsx` | 나침반 Html 교체, 실제 건물 데이터 우선 표시 | ~30줄 |
+
+---
+
+### 5. Git 초기화 + GitHub 푸시 + Vercel 프로덕션 배포
+
+#### Git 초기화
+- `git init` → `.gitignore` 생성 (node_modules, .env, dist, IDE 파일 등 제외)
+- 루트에 잔존하던 잘못된 파일명 (`frontend/{if(dd.file){const{line}`) 삭제
+- `git add -A` → 초기 커밋 생성
+- `git branch -M main` → 기본 브랜치 이름을 `main`으로 변경
+- `git remote add origin https://github.com/bignine99/haema_archi_01.git`
+- `git push -u origin main` → GitHub 리포지토리에 푸시 성공
+
+#### Vercel 배포 설정
+- `vercel.json` 신규 생성:
+  ```json
+  {
+    "buildCommand": "cd frontend && npm install && npm run build",
+    "installCommand": "cd frontend && npm install",
+    "outputDirectory": "frontend/dist",
+    "rewrites": [
+      { "source": "/kakao-api/:path*", "destination": "https://dapi.kakao.com/:path*" },
+      { "source": "/vworld-api/:path*", "destination": "http://api.vworld.kr/:path*" }
+    ]
+  }
+  ```
+- `npx -y vercel --prod --yes` → 프로덕션 배포 성공
+- 배포 URL: `https://260226haemaarch.vercel.app`
+- 과업지시서 분석: 정상 작동 확인
+- 법규분석: **에러 발생** → API 키 유출 문제 발견
+
+#### 수정/생성 파일
+| 파일 | 변경 내용 | 규모 |
+|------|----------|------|
+| `.gitignore` | Git 제외 파일 설정 (node_modules, .env 등) | 신규 31줄 |
+| `vercel.json` | Vercel 배포 설정 (빌드, API 리라이트) | 신규 21줄 |
+
+---
+
+### 6. 🚨 API 키 유출 사고 + 환경변수 방식 전환 (보안 수정)
+
+#### 사고 경위
+1. GitHub **Public** 리포지토리에 Gemini/카카오/Vworld API 키가 하드코딩된 상태로 푸시
+2. Google의 자동 보안 스캐너가 Gemini API 키를 감지 → **즉시 차단** (403 Forbidden)
+3. 에러 메시지: `"Your API key was reported as leaked. Please use another API key."`
+4. 카카오/Vworld 키는 자동 차단 시스템이 없어 정상 작동 중
+
+#### 영향 범위
+| API | 키 | 차단 여부 | 다른 프로그램 영향 |
+|-----|---|----------|-----------------|
+| 🔴 Gemini | `AIzaSyAkuPhA6...` (구 키) | **차단됨** | 이 키 사용하는 20+ 프로그램 모두 영향 |
+| 🟢 카카오 REST | `72de5cd3...` | 정상 | 영향 없음 |
+| 🟢 Vworld | `B8385331...` | 정상 | 영향 없음 |
+
+#### 해결 조치
+1. **새 Gemini API 키 발급**: `AIzaSyBpjTpY-pvfpbUovwKES2WGD7ejDu02bKk`
+2. **모든 하드코딩 API 키 제거** → `process.env` 환경변수로 교체
+3. **`webpack.config.js`에 `webpack.DefinePlugin` 추가** — .env → 빌드 시 주입
+4. **로컬 `frontend/.env` 파일 생성** (Git에 포함되지 않음)
+5. **Vercel 대시보드에 3개 환경변수 등록** (GEMINI, KAKAO, VWORLD)
+6. **재배포 성공** — `260226haemaarch.vercel.app` Ready 상태
+
+#### 수정된 파일 상세
+| 파일 | 변경 내용 | 규모 |
+|------|----------|------|
+| `frontend/webpack.config.js` | `webpack.DefinePlugin` 추가 — .env → process.env 주입 | 전면 재작성 (~90줄) |
+| `frontend/.env` | 실제 API 키 저장 (Git 미포함) | 신규 4줄 |
+| `.gitignore` | `frontend/.env`, `frontend/.env.local` 추가 | 2줄 추가 |
+| `frontend/src/services/geminiService.ts` | `process.env.GEMINI_API_KEY` 교체 | 1줄 |
+| `frontend/src/services/regulationAnalysisService.ts` | `process.env.GEMINI_API_KEY` 교체 | 1줄 |
+| `frontend/src/services/siteAnalysisService.ts` | `process.env.GEMINI_API_KEY` 교체 | 1줄 |
+| `frontend/src/services/gisApi.ts` | `process.env.KAKAO_REST_KEY`, `process.env.VWORLD_API_KEY` 교체 | 2줄 |
+| `frontend/src/components/ui/MapPanel.tsx` | `process.env.VWORLD_API_KEY` 교체 | 1줄 |
+| `services/gis-service/main.py` | `os.getenv()` 기본값에서 키 제거 | 2줄 |
+| `docker-compose.yml` | 환경변수 기본값에서 키 제거 | 2줄 |
+
+#### Git 커밋 이력
+| 시각 | 커밋 해시 | 메시지 |
+|------|----------|--------|
+| ~20:45 | `8731bf7` | `feat: HAEMA ARCHI AI Architecture Platform - Initial Release` |
+| ~21:35 | `2b05436` | `security: Remove all hardcoded API keys, use environment variables via webpack.DefinePlugin` |
+
+#### Vercel 배포 이력
+| 시각 | 상태 | URL |
+|------|------|-----|
+| ~21:00 | ✅ Ready (초기 배포) | `260226haemaarch-bn6k5dajc-danny-chos-projects.vercel.app` |
+| ~21:40 | ✅ Ready (보안 수정) | `260226haemaarch.vercel.app` |
+
+---
+
+### 수정/생성된 파일 총괄 (2026-03-03 전일)
+
+| 파일 | 변경 내용 | 변경 규모 |
+|------|----------|----------|
+| `services/regulationAnalysisService.ts` | Gemini 법규분석 프롬프트 + API (신규) | **+281줄** |
+| `services/siteAnalysisService.ts` | Gemini 대지분석 5대영역 + API (신규) | **+264줄** |
+| `services/gisApi.ts` | fetchSurroundingBuildings + 환경변수 교체 | +50줄 |
+| `services/geminiService.ts` | 환경변수 교체 | 1줄 |
+| `components/ui/RegulationPanel.tsx` | Gemini 연동 법규분석 2단 카드 UI | **전면 재작성** |
+| `components/three/SceneViewer.tsx` | 나침반 Html 교체, 실제 건물 우선 | ~30줄 |
+| `components/ui/MapPanel.tsx` | 환경변수 교체 | 1줄 |
+| `App.tsx` | 대지분석 UI, 메뉴 순서, 헤더 검색바, 높이 조정 | ~260줄 |
+| `store/projectStore.ts` | realSurroundingBuildings 상태 추가 | +20줄 |
+| `frontend/webpack.config.js` | DefinePlugin + .env 로딩 | **전면 재작성 (~90줄)** |
+| `frontend/.env` | API 키 저장 (Git 미포함) | 신규 4줄 |
+| `.gitignore` | .env 보호 + frontend/.env 추가 | ~35줄 |
+| `vercel.json` | Vercel 배포 설정 | 신규 21줄 |
+| `docker-compose.yml` | 환경변수 기본값 제거 | 2줄 |
+| `services/gis-service/main.py` | 환경변수 기본값 제거 | 2줄 |
+
+---
+
+## 📊 전체 진행 상황 (업데이트: 2026-03-03 21:50)
+
+| Step | 내용 | 상태 |
+|------|------|------|
+| Step 1 | Base UI & 3D 환경 구축 | ✅ 완료 |
+| Step 2 | 지도 & 지적도 연동 (카카오/Vworld API) | ✅ 완료 |
+| Step 2.5 | 법규 엔진 기초 + 법규 팝업 9섹션 | ✅ 완료 |
+| Phase 1-B | Build-line 산출 (2D Offset → 3D) | ✅ 완료 |
+| Phase 1-C | Max Envelope 3D (Boolean 절단) | ✅ 완료 |
+| UI 리스트럭처링 | 11개 메뉴 사이드바 + 라우팅 | ✅ 완료 |
+| 과업지시서 업로드 | PDF/TXT 파싱 → 대시보드 자동 입력 | ✅ 완료 |
+| 대시보드 2단 레이아웃 | 5행×2열, 주소검색+세부지침 통합 | ✅ 완료 |
+| AI 과업지시서 분석 | 설계자 핵심 정보 추출, 데이터 우선순위 | ✅ 완료 |
+| 인프라 개선 | 한글→영문 경로 전환, 직접 실행 | ✅ 완료 |
+| **Gemini 법규분석 서비스** | **7대 카테고리 30+ 법규 AI 자동 분석** | ✅ **완료** (2026-03-03) |
+| **법규분석 UI v2** | **Gemini 연동 + 2단 카드 + 리스크 등급** | ✅ **완료** (2026-03-03) |
+| **Gemini 대지분석 서비스** | **5대 영역 종합 분석 + SWOT + 디자인 전략** | ✅ **완료** (2026-03-03) |
+| **3D 매스 모듈 개선** | **나침반, 주변건물 API, 헤더 주소검색** | ✅ **완료** (2026-03-03) |
+| **Git + Vercel 배포** | **GitHub 푸시 + Vercel 프로덕션 배포** | ✅ **완료** (2026-03-03) |
+| **API 키 보안 수정** | **환경변수 전환 + Vercel 환경변수 등록** | ✅ **완료** (2026-03-03) |
+| Phase 1-A | 대지정보 수집 강화 | 🔶 부분완료 |
+| Phase 1-D | 환경 시뮬레이션 (일조/바람/소음/조망) | ⬜ 예정 |
+| Phase 1-E | 제너레이티브 배치 (GA 엔진) | ⬜ 예정 |
+| Phase 1-F | 사업성 실시간 연동 (ROI/IRR) | ⬜ 예정 |
+| Phase 2 | 평면도 자동 생성 | ⬜ 예정 |
+| Phase 3 | 입면·단면·3D 매스 | ⬜ 예정 |
+| Phase 4 | 컨셉 시각화 | ⬜ 예정 |
+| Phase 5 | 면적표·실 구성 | ⬜ 예정 |
+
+---
+
+## 🛠️ 기술 스택 (확정, 2026-03-03 업데이트)
+
+| 분류 | 기술 | 비고 |
+|------|------|------|
+| Frontend | Webpack 5 + React 18 + TypeScript | 네이티브 바이너리 의존 없음 |
+| 3D Engine | Three.js (@react-three/fiber, drei) | WebGL 기반 |
+| State | Zustand | 경량 상태 관리 |
+| Animation | Framer Motion | UI 애니메이션 |
+| Icons | Lucide React | 아이콘 세트 |
+| Styling | Tailwind CSS 3 + PostCSS | 다크 글래스모피즘 테마 |
+| Font | Pretendard Variable | 한글 최적화 |
+| Map | Leaflet + React-Leaflet | 2D 지적도 |
+| PDF Parser | pdf.js (CDN 동적 로딩) | 클라이언트 사이드 PDF 텍스트 추출 |
+| Geometry | 자체 구현 (offsetPolygon 등) | 2D 기하연산 (Phase 1-C) |
+| **AI 분석** | **Gemini 2.5 Flash Lite** | **법규분석 + 대지분석 + 과업지시서** |
+| **API 키 관리** | **webpack DefinePlugin + .env** | **환경변수 방식 (Git 미포함)** |
+| GIS API | 카카오 REST + Vworld | 주소검색 + 필지 + 지도타일 |
+| Backend (Step 2) | FastAPI (Python) | GIS 서비스 구축 완료 |
+| Container | Docker Compose | 7개 서비스 오케스트레이션 (예정) |
+| **배포** | **Vercel (프로덕션)** | **`260226haemaarch.vercel.app`** |
+| **VCS** | **Git + GitHub** | **`bignine99/haema_archi_01` (Public)** |
+| 향후 AI | DEAP(GA), PyTorch(GAN/RL) | 배치 최적화 |
+| 향후 렌더링 | Stable Diffusion + ControlNet | 컨셉 시각화 |
+| 향후 Export | jsPDF, SheetJS, DXF-writer | 도면/리포트 출력 |
+
+---
+
+## ✅ 완료된 작업: 3D 매스 VWorld 위성지도 렌더링 확인 및 CORS 해결 (2026-03-04)
+
+### 2026-03-04 주요 수정 프로세스
+
+#### 1. VWorld API 위성지도(PHOTO) 텍스처 렌더링 오류 해결
+- 기존에 위성지도가 렌더링되지 않고 회색/흰색 평면으로 나오던 문제를 해결함.
+- `THREE.TextureLoader`로 텍스처를 불러온 후, WebGL GPU 업로드를 강제로 실행시키기 위해 `tex.needsUpdate = true` 코드를 명시적으로 추가함.
+- 카메라 시점 변화에도 지면에 텍스처가 정상 렌더링 되도록 플레인 매테리얼에 `side={THREE.DoubleSide}` 속성 적용.
+- 3D 씬 내의 조명 계산에 의해 텍스처가 하얗게 타버리는(blow-out) 이슈를 방지하기 위해 `meshStandardMaterial`에서 조명에 영향을 받지 않는 `meshBasicMaterial`로 재질을 변경함.
+
+#### 2. CORS(Cross-Origin Resource Sharing) 이슈 완벽 해결
+- 로컬 웹팩(Webpack) 프록시(`webpack.config.js`) 설정의 `/vworld-api` 엔드포인트에 `Access-Control-Allow-Origin: '*'` 헤더를 강제로 주입하도록 `onProxyRes` 이벤트를 삽입.
+- `SceneViewer.tsx`의 `TextureLoader`에 `loader.setCrossOrigin('anonymous')` 설정을 부여해 WebGL에서 타일맵 이미지 크로스도메인 오류를 무시하도록 처리.
+
+#### 3. 통신 검증용 사이드 스크립트 작성 (디버깅 과정)
+- `test_png.js`, `test_png_full.js`, `test_proxy.js`, `test_basemaps.js`, `photo_test.js` 등 다수의 Node.js 기반 검증 스크립트를 생성하여 VWorld API 이미지 수신 상태의 바이트(Byte) 크기, HTTP 상태 코드 및 Hex 헤더를 터미널에서 1차 검증함.
+- `Puppeteer`를 활용한 브라우저 디버깅 스크립트(`test_puppeteer.js`)를 작성해 컴포넌트 생명주기 내 발생하는 네트워크 요청과 콘솔 오류를 추적.
+
+#### 4. Webpack 기반 빌드 파이프라인으로 전환
+- 한글 경로 및 Windows 환경에서 발생하는 Vite/Next.js의 C++ 네이티브 바이너리 의존성 컴파일 오류를 원천 차단하기 위해 순수 Webpack 기반으로 개발 서버 전환을 완료하였음.

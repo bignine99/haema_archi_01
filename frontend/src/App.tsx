@@ -35,6 +35,7 @@ function MassAddressSearch() {
     const loadRealParcel = useProjectStore(s => s.loadRealParcel);
     const address = useProjectStore(s => s.address);
     const isLoading = useProjectStore(s => s.isLoading);
+    const apiError = useProjectStore(s => s.apiError);
 
     const handleSearch = async () => {
         if (!query.trim()) return;
@@ -42,7 +43,16 @@ function MassAddressSearch() {
         try {
             const res = await searchRealAddress(query);
             setResults(res);
-            setShowDropdown(res.length > 0);
+            if (res && res.length > 0) {
+                // 첫 번째 검색 결과를 자동으로 선택
+                setQuery(res[0].address_name);
+                await loadRealParcel(res[0]);
+                setShowDropdown(false);
+            } else {
+                setShowDropdown(false);
+            }
+        } catch (error) {
+            console.error(error);
         } finally {
             setSearching(false);
         }
@@ -74,6 +84,9 @@ function MassAddressSearch() {
             </button>
             {isLoading && (
                 <span className="text-xs text-blue-500 animate-pulse">대지 로딩중...</span>
+            )}
+            {apiError && (
+                <span className="text-xs text-red-500 font-medium pl-1">{apiError}</span>
             )}
 
             {/* 카카오 검색 결과 드롭다운 */}

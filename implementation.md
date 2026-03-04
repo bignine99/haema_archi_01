@@ -947,8 +947,10 @@ Vworld 필지/지형/도로   ←─┐    ┌─→  과업지시서 분석 결
 | Phase | 단계 | 작업 | 의존성 | 상태 |
 |:---:|:---:|------|--------|:---:|
 | **A** | Step 1 | 나침반 N/S/E/W 4방위 표시 | Three.js | ✅ 완료 |
-| **A** | Step 2 | 주변 건물 26개 도시 컨텍스트 확장 | Three.js | ✅ 완료 |
+| **A** | Step 2 | 주변 건물 26개 도시 컨텍스트 확장 | Three.js | ✅ 완료 (1차) |
 | **A** | Step 3 | MaxEnvelope 법규 볼륨 시각화 | Three.js | ✅ 기존 구현 |
+| **A-2** | Step 3.1 | **해상도 개선**: VWorld 고해상도 위성지도(WMTS 타일링) 적용 | Three.js | 🔄 대기 |
+| **A-2** | Step 3.2 | **정밀도 향상**: 실제 건물 외곽선 및 높이 정밀 3D 모델(Vworld 3D) 연동 | Vworld 3D API | 🔄 대기 |
 | **B** | Step 4 | `massAnalysisService.ts` — Gemini P1~P5 분석 프롬프트 | Gemini 키 ✅ |  |
 | **B** | Step 5 | 매스 분석 사이드 패널 UI (법규 + 환경 + 조망 + 공간) | Step 4 |  |
 | **C** | Step 6 | P5 생성형 대안 생성 + 비교 대시보드 | Step 5 |  |

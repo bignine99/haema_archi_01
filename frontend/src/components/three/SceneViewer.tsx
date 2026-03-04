@@ -1,8 +1,7 @@
-
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Grid, Environment, ContactShadows, PerspectiveCamera, Line, Text, Html, Bounds } from '@react-three/drei';
 import { useProjectStore, polygonCentroid, polygonBBox, MOCK_SITE_CONTEXTS, type NearbyBuilding, type RoadSegment, type TreeData, type SiteContext } from '@/store/projectStore';
-import { useMemo, useEffect, useRef } from 'react';
+import { useMemo, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 // ─── 층별 색상 매핑 ───
@@ -41,8 +40,8 @@ function CameraAdjuster() {
 
         console.log(`[Camera] 대지: ${bbox.width.toFixed(1)}x${bbox.height.toFixed(1)}m, 건물: ${buildingHeight.toFixed(1)}m, 컨텍스트반경: ${contextRadius.toFixed(1)}m`);
 
-        // Forma/TestFit 스타일: 넓은 조감도 (주변 건물 전부 포함)
-        const finalDistance = Math.max(sceneDiagonal * 1.3, 120);
+        // Forma/TestFit 스타일: 넓은 조감도 (주변 건물 및 환경 500m 반경이 잘 보이도록)
+        const finalDistance = Math.max(sceneDiagonal * 2.5, 400);
 
         // 장면 중심 = 건물 높이의 1/5 (지면 중심에 가깝게)
         const targetY = buildingHeight / 5;
@@ -523,14 +522,57 @@ function TreeInstances({ context }: { context: SiteContext }) {
     );
 }
 
-// ─── 확장 지면 (도시 블록 느낌) ───
+// ─── 확장 지면 (도시 블록 느낌 / 위성 맵 텍스처) ───
 function UrbanGroundPlane() {
+    const centerLng = useProjectStore(s => s.centerLng);
+    const centerLat = useProjectStore(s => s.centerLat);
+    const [texture, setTexture] = useState<THREE.Texture | null>(null);
+
+    // VWorld API Parameter
+    const size = 1024;
+    const zoom = 15; // 줌 레벨 15: 약 2km x 2km 커버 (주변 500m 반경 이상 충분히 포함)
+    const key = process.env.VWORLD_API_KEY || 'B8385331-2B58-3CEF-9209-33CB9AFD68A6';
+
+    // basemap=PHOTO 로 설정하여 실제 위성사진 적용 (도로, 하천, 녹지 등이 현실감 있게 표현됨)
+    const url = `/vworld-api/req/image?service=image&request=getmap&key=${key}&basemap=PHOTO&center=${centerLng},${centerLat}&zoom=${zoom}&size=${size},${size}&crs=epsg:4326&domain=${window.location.origin}`;
+
+    useEffect(() => {
+        if (!centerLng || !centerLat) {
+            setTexture(null);
+            return;
+        }
+
+        console.log(`[UrbanGroundPlane] Fetching satellite texture (PHOTO), url: ${url}`);
+
+        const loader = new THREE.TextureLoader();
+        // 크로스 오리진 설정 (프록시 우회 또는 외부 직접 접근 시 대비)
+        loader.setCrossOrigin('anonymous');
+
+        loader.load(url, (tex) => {
+            console.log(`[UrbanGroundPlane] Texture loaded successfully.`);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            tex.minFilter = THREE.LinearFilter; // 픽셀화 방지, 부드러운 텍스처
+            tex.needsUpdate = true; // WebGL GPU 업로드 강제
+            setTexture(tex);
+        }, undefined, (err) => {
+            console.warn('[3D] 위성 이미지 로드 실패:', err);
+            setTexture(null);
+        });
+    }, [centerLng, centerLat, url]);
+
+    // zoom 15, size 1024 해상도에 맞는 지리적 범위 (약 2.5km)를 planeSize로 지정
+    const planeSize = 2500;
+
     return (
         <group>
-            {/* 넓은 지면 (밝은 회색) */}
+            {/* 500M 반경 이상을 품는 광역 위성 지면 */}
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
-                <planeGeometry args={[400, 400]} />
-                <meshStandardMaterial color="#f0f0f0" roughness={0.95} metalness={0} />
+                <planeGeometry args={[planeSize, planeSize]} />
+                {texture ? (
+                    <meshBasicMaterial map={texture} color="#ffffff" side={THREE.DoubleSide} />
+                ) : (
+                    <meshStandardMaterial color="#2d2d2d" roughness={0.9} metalness={0} />
+                )}
             </mesh>
         </group>
     );

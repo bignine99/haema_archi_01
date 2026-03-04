@@ -10,6 +10,14 @@
 const KAKAO_REST_KEY = process.env.KAKAO_REST_KEY || '';
 const VWORLD_API_KEY = process.env.VWORLD_API_KEY || '';
 
+const BUILDING_USE_COLORS: Record<string, string> = {
+    residential: '#e2e8f0',
+    commercial: '#cbd5e1',
+    office: '#d4d4d8',
+    mixed: '#d6d3d1',
+    parking: '#c7c7c7',
+};
+
 // ─── 타입 정의 ───
 
 export interface KakaoAddressResult {
@@ -116,7 +124,7 @@ export async function getVworldParcel(lng: number, lat: number): Promise<ParcelR
             const url = `/vworld-api/req/data?` +
                 `service=data&request=GetFeature&data=${layer}` +
                 `&key=${VWORLD_API_KEY}` +
-                `&domain=http://localhost` +
+                `&domain=${window.location.origin}` +
                 `&geomFilter=POINT(${lng} ${lat})` +
                 `&geometry=true&crs=EPSG:4326&format=json&size=1`;
 
@@ -212,7 +220,141 @@ export async function searchAndGetParcel(address: string): Promise<{
     return { kakaoResult: addr, parcel };
 }
 
+// ─── 3-1. vWorld 건축물대장 API 연동 (실제 층수/높이 반영) ───
+
+export async function getVworldBuildings(centerLng: number, centerLat: number, radius: number = 500): Promise<RealBuilding[]> {
+    const buildings: RealBuilding[] = [];
+    const bboxRadius = radius / 100000; // 대략적인 WGS84 도 단위 반경
+    const minX = centerLng - bboxRadius;
+    const minY = centerLat - bboxRadius;
+    const maxX = centerLng + bboxRadius;
+    const maxY = centerLat + bboxRadius;
+
+    // VWorld 건물 데이터 레이어 (LT_C_BULD_INFO 또는 LT_C_BULD)
+    const layer = 'LT_C_BULD_INFO';
+    const url = `/vworld-api/req/data?service=data&request=GetFeature&data=${layer}&key=${VWORLD_API_KEY}&domain=${window.location.origin}&geomFilter=BBOX(${minX},${minY},${maxX},${maxY})&geometry=true&crs=EPSG:4326&format=json&size=1000`;
+
+    try {
+        console.log(`[GIS] Vworld 주변 건물 데이터 요청: BBOX 반경 ${radius}m`);
+        const res = await fetch(url);
+        if (!res.ok) return [];
+        const data = await res.json();
+        const features = data?.response?.result?.featureCollection?.features;
+
+        if (!features || features.length === 0) return [];
+
+        const seen = new Set<string>();
+
+        for (const feature of features) {
+            const props = feature.properties || {};
+            const geom = feature.geometry;
+
+            if (!geom) continue;
+
+            // 건물 용도 및 색상 결정
+            const bdtypCd = props.bdtyp_cd || props.BDTYP_CD || '';
+            const bdName = props.buld_nm || props.BULD_NM || '';
+            let use: RealBuilding['use'] = 'residential';
+            let color = BUILDING_USE_COLORS['residential'] || '#e2e8f0';
+            let category = '주거/기타';
+
+            if (bdName.includes('아파트')) {
+                use = 'residential'; category = '아파트';
+            } else if (bdtypCd.startsWith('03') || bdtypCd.startsWith('04')) {
+                use = 'commercial'; color = BUILDING_USE_COLORS['commercial']; category = '상업시설';
+            } else if (bdtypCd.startsWith('08')) {
+                use = 'school'; color = '#c4b5fd'; category = '학교/교육';
+            } else if (bdtypCd.startsWith('05') || bdtypCd.startsWith('06') || bdtypCd.startsWith('07')) {
+                use = 'commercial'; color = BUILDING_USE_COLORS['commercial']; category = '상가/업무';
+            } else if (bdtypCd.startsWith('10') || bdtypCd.startsWith('11') || bdtypCd.startsWith('12')) {
+                use = 'public'; color = '#93c5fd'; category = '공공시설';
+            } else if (bdtypCd.startsWith('14')) {
+                use = 'office'; color = BUILDING_USE_COLORS['office']; category = '업무시설';
+            } else if (bdName.includes('공장') || bdtypCd.startsWith('17')) {
+                use = 'industrial'; color = '#a8a29e'; category = '산업시설';
+            }
+
+            // 높이 및 층수
+            const floors = parseInt(props.ag_geom || props.AG_GEOM || '0', 10);
+            if (floors <= 0) continue; // 층수가 없는 가건물 제외
+            let height = parseFloat(props.height || props.HEIGHT || '0');
+            if (!height || height <= 0) {
+                height = floors * 3.0; // 층고 3m 가정
+            }
+
+            // 좌표 및 크기 계산
+            let rawCoords: [number, number][];
+            if (geom.type === 'MultiPolygon') {
+                rawCoords = geom.coordinates[0][0];
+            } else if (geom.type === 'Polygon') {
+                rawCoords = geom.coordinates[0];
+            } else {
+                continue; // 점/선 제외
+            }
+
+            // BBox 및 중심 계산
+            let cLng = 0, cLat = 0;
+            let pMinX = Infinity, pMinY = Infinity, pMaxX = -Infinity, pMaxY = -Infinity;
+            const validCoords = rawCoords;
+
+            for (const [lng, lat] of validCoords) {
+                cLng += lng; cLat += lat;
+                if (lng < pMinX) pMinX = lng;
+                if (lng > pMaxX) pMaxX = lng;
+                if (lat < pMinY) pMinY = lat;
+                if (lat > pMaxY) pMaxY = lat;
+            }
+            cLng /= validCoords.length;
+            cLat /= validCoords.length;
+
+            const key = `${cLng.toFixed(4)}_${cLat.toFixed(4)}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+
+            const [localX, localZ] = wgs84ToLocalMeters([[cLng, cLat]], centerLng, centerLat)[0];
+            const dist = Math.sqrt(localX * localX + localZ * localZ);
+
+            // 중심으로부터 거리가 가까우면(자기 자신 대지) 생략 (약 10m 이내)
+            if (dist < 10) continue;
+
+            // Width, Depth 계산 (로컬 미터 기준 BBox 크기)
+            const pts = wgs84ToLocalMeters([
+                [pMinX, pMinY], [pMaxX, pMaxY]
+            ], cLng, cLat);
+
+            const width = Math.abs(pts[1][0] - pts[0][0]) || 10;
+            const depth = Math.abs(pts[1][1] - pts[0][1]) || 10;
+
+            buildings.push({
+                id: `vw_${props.bd_mgt_sn || props.BD_MGT_SN || buildings.length}`,
+                name: bdName,
+                category,
+                categoryGroup: bdtypCd,
+                x: localX,
+                z: localZ,
+                lng: cLng,
+                lat: cLat,
+                width: width * 0.9, // 약간 줄여서 간격 확보
+                depth: depth * 0.9,
+                height,
+                floors,
+                use,
+                color,
+                distance: dist,
+            });
+        }
+
+        buildings.sort((a, b) => a.distance - b.distance);
+        console.log(`[GIS] ✅ Vworld에서 실제 건물 ${buildings.length}개 발견`);
+        return buildings;
+    } catch (e) {
+        console.warn(`[GIS] Vworld 건물 조회 실패:`, e);
+        return [];
+    }
+}
+
 // ─── 4. 카카오 카테고리 검색으로 주변 실제 건물 조회 ───
+
 
 export interface RealBuilding {
     id: string;
@@ -299,12 +441,31 @@ export async function fetchSurroundingBuildings(
 ): Promise<RealBuilding[]> {
     console.log(`[GIS] 주변 건물 검색 시작: (${centerLng}, ${centerLat}), 반경=${radius}m`);
 
-    const buildings: RealBuilding[] = [];
-    const seen = new Set<string>(); // 중복 제거 (좌표 기반)
+    // 1단계: Vworld 건축물대장 API 연동을 통한 실제 층수/높이/볼륨 확보 시도
+    const vworldBuildings = await getVworldBuildings(centerLng, centerLat, radius);
+    if (vworldBuildings.length > 0) {
+        return vworldBuildings;
+    }
 
-    // 1) 카카오 카테고리 검색
-    for (const cat of CATEGORY_GROUPS) {
+    // 2단계: Vworld 실패 (또는 데이터 없음)시 카카오 검색을 통한 Fallback 생성
+    console.log(`[GIS] Vworld 건물 없음. 카카오 검색 Fallback 사용`);
+    const buildings: RealBuilding[] = [];
+    const seen = new Set<string>();
+
+    const categoryPromises = CATEGORY_GROUPS.map(async (cat) => {
         const docs = await kakaoCategorySearch(cat.code, centerLng, centerLat, radius);
+        return { cat, docs };
+    });
+
+    const keywordPromises = KEYWORD_SEARCHES.map(async (kw) => {
+        const docs = await kakaoKeywordSearch(kw.keyword, centerLng, centerLat, radius);
+        return { kw, docs };
+    });
+
+    const categoryResults = await Promise.all(categoryPromises);
+    const keywordResults = await Promise.all(keywordPromises);
+
+    for (const { cat, docs } of categoryResults) {
         for (const doc of docs) {
             const bLng = parseFloat(doc.x);
             const bLat = parseFloat(doc.y);
@@ -314,13 +475,9 @@ export async function fetchSurroundingBuildings(
 
             const [localX, localZ] = wgs84ToLocalMeters([[bLng, bLat]], centerLng, centerLat)[0];
             const dist = Math.sqrt(localX * localX + localZ * localZ);
-
-            // 대지 자체 위치(10m 이내)는 제외
             if (dist < 10) continue;
 
-            // 거리에 따라 크기 약간 변동 (먼 건물은 더 클 수 있음)
             const sizeFactor = 0.8 + Math.random() * 0.4;
-
             buildings.push({
                 id: `cat_${cat.code}_${doc.id || buildings.length}`,
                 name: doc.place_name || '',
@@ -341,9 +498,7 @@ export async function fetchSurroundingBuildings(
         }
     }
 
-    // 2) 키워드 검색 (아파트, 빌라, 오피스텔 등)
-    for (const kw of KEYWORD_SEARCHES) {
-        const docs = await kakaoKeywordSearch(kw.keyword, centerLng, centerLat, radius);
+    for (const { kw, docs } of keywordResults) {
         for (const doc of docs) {
             const bLng = parseFloat(doc.x);
             const bLat = parseFloat(doc.y);
@@ -356,7 +511,6 @@ export async function fetchSurroundingBuildings(
             if (dist < 10) continue;
 
             const sizeFactor = 0.8 + Math.random() * 0.4;
-
             buildings.push({
                 id: `kw_${kw.keyword}_${doc.id || buildings.length}`,
                 name: doc.place_name || '',
@@ -377,9 +531,7 @@ export async function fetchSurroundingBuildings(
         }
     }
 
-    // 거리순 정렬
     buildings.sort((a, b) => a.distance - b.distance);
-
-    console.log(`[GIS] ✅ 총 ${buildings.length}개 실제 주변 건물 발견`);
+    console.log(`[GIS] ✅ 총 ${buildings.length}개 실제 주변 건물 발견(Fallback)`);
     return buildings;
 }
