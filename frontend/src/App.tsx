@@ -1,4 +1,5 @@
 import { Suspense, lazy, useState } from 'react';
+import LandingPage from '@/components/ui/LandingPage';
 import Dashboard from '@/components/ui/Dashboard';
 import RegulationPanel from '@/components/ui/RegulationPanel';
 import SiteAnalysisPanel from '@/components/ui/SiteAnalysisPanel';
@@ -128,6 +129,7 @@ const MENU_ITEMS = [
 ];
 
 export default function App() {
+    const [isAuthorized, setIsAuthorized] = useState(false);
     const [activeMenu, setActiveMenu] = useState('dashboard');
     const geminiApiKey = useProjectStore(s => s.geminiApiKey);
     const setGeminiApiKey = useProjectStore(s => s.setGeminiApiKey);
@@ -193,6 +195,10 @@ export default function App() {
             default:
                 return renderPlaceholder();
         }
+    }
+
+    if (!isAuthorized) {
+        return <LandingPage onEnter={() => setIsAuthorized(true)} />;
     }
 
     return (
@@ -296,18 +302,11 @@ export default function App() {
                         )}
                     </div>
                     <div className="flex items-center gap-4">
-                        <input
-                            type="password"
-                            placeholder="Gemini API Key 입력"
-                            value={geminiApiKey}
-                            onChange={(e) => setGeminiApiKey(e.target.value)}
-                            className="text-xs border border-slate-200 px-3 py-1.5 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 w-48 bg-slate-50 text-slate-800 placeholder:text-slate-400"
-                        />
-                        <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 font-medium border border-emerald-100 flex items-center gap-1.5">
+                        <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 font-medium border border-emerald-100 flex items-center gap-1.5 shadow-sm">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                            System Normal
+                            API 연동 완료
                         </span>
-                        <button className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 border border-slate-200 px-3 py-1.5 rounded-md hover:bg-slate-50 transition-colors">
+                        <button className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 border border-slate-200 px-3 py-1.5 rounded-md hover:bg-slate-50 transition-colors shadow-sm">
                             <span>프로젝트 내보내기</span>
                         </button>
                     </div>
