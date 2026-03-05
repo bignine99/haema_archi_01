@@ -281,6 +281,10 @@ export interface ProjectState {
     loadRealParcel: (kakaoResult: KakaoAddressResult) => Promise<void>;
     updateFromDocument: (fileName: string, parsedData: ParsedProjectData) => void;
     recalculate: () => void;
+
+    // 사용자 입력 API 키
+    geminiApiKey: string;
+    setGeminiApiKey: (key: string) => void;
 }
 
 // ─── 법규 기반 계산 로직 ───
@@ -397,6 +401,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     selectedFloor: null,
     isLoading: false,
 
+    geminiApiKey: '',
+
     setAddress: (address) => set({ address }),
 
     setZoneType: (zoneType) => {
@@ -421,6 +427,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     setSelectedFloor: (selectedFloor) => set({ selectedFloor }),
     setShowMaxEnvelope: (showMaxEnvelope) => set({ showMaxEnvelope }),
     setNorthAngle: (northAngle) => { set({ northAngle }); get().recalculate(); },
+    setGeminiApiKey: (geminiApiKey: string) => set({ geminiApiKey }),
 
     selectParcel: (id: string) => {
         const parcel = MOCK_PARCELS.find(p => p.id === id);

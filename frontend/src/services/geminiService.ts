@@ -5,10 +5,9 @@
  * 역할: 과업지시서 원문을 면밀히 분석한 후, 
  *       설계자가 꼭 알아야 할 핵심만 불릿 형태로 요약
  */
+import { useProjectStore } from '@/store/projectStore';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_MODEL = 'gemini-2.5-flash-lite';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
 export interface GeminiAnalysisResult {
     designDirection: string[];     // 설계 방향 (핵심 3~5개)
@@ -57,6 +56,14 @@ const ANALYSIS_PROMPT = `당신은 건축 설계 전문가입니다. 아래 "과
 
 export async function analyzeWithGemini(documentText: string): Promise<GeminiAnalysisResult | null> {
     try {
+        const apiKey = useProjectStore.getState().geminiApiKey;
+        if (!apiKey) {
+            console.error('[Gemini] API 키가 입력되지 않았습니다.');
+            return null;
+        }
+
+        const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
         // 텍스트가 너무 길면 앞뒤 핵심 부분만 추출 (API 토큰 제한)
         let text = documentText;
         if (text.length > 15000) {

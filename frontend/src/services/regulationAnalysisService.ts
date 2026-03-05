@@ -6,9 +6,9 @@
  *       자동 분석하여 설계자가 인지해야 할 핵심 사항을 제공
  */
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+import { useProjectStore } from '@/store/projectStore';
+
 const GEMINI_MODEL = 'gemini-2.5-flash-lite';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
 // ────── 입력 타입 ──────
 export interface ProjectInfoForRegulation {
@@ -187,6 +187,14 @@ export async function analyzeRegulations(
   projectInfo: ProjectInfoForRegulation
 ): Promise<RegulationAnalysisResult | null> {
   try {
+    const apiKey = useProjectStore.getState().geminiApiKey;
+    if (!apiKey) {
+      console.error('[법규분석] API 키가 입력되지 않았습니다.');
+      return null;
+    }
+
+    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
     console.log('[법규분석] Gemini AI 분석 시작...', {
       project: projectInfo.projectName,
       use: projectInfo.buildingUse,

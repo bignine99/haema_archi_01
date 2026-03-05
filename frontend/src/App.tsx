@@ -129,6 +129,8 @@ const MENU_ITEMS = [
 
 export default function App() {
     const [activeMenu, setActiveMenu] = useState('dashboard');
+    const geminiApiKey = useProjectStore(s => s.geminiApiKey);
+    const setGeminiApiKey = useProjectStore(s => s.setGeminiApiKey);
 
     // 3D 매스 전용 뷰 (패널 제거, 3D 화면만 풀스크린)
     const render3DMassView = () => (
@@ -294,6 +296,13 @@ export default function App() {
                         )}
                     </div>
                     <div className="flex items-center gap-4">
+                        <input
+                            type="password"
+                            placeholder="Gemini API Key 입력"
+                            value={geminiApiKey}
+                            onChange={(e) => setGeminiApiKey(e.target.value)}
+                            className="text-xs border border-slate-200 px-3 py-1.5 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 w-48 bg-slate-50 text-slate-800 placeholder:text-slate-400"
+                        />
                         <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 font-medium border border-emerald-100 flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                             System Normal

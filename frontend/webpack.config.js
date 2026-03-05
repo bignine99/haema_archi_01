@@ -56,7 +56,6 @@ module.exports = {
         }),
         // 환경변수를 빌드 시 코드에 주입 (API 키를 소스코드에 넣지 않음)
         new webpack.DefinePlugin({
-            'process.env.GEMINI_API_KEY': JSON.stringify(dotenv.GEMINI_API_KEY || process.env.GEMINI_API_KEY || ''),
             'process.env.KAKAO_REST_KEY': JSON.stringify(dotenv.KAKAO_REST_KEY || process.env.KAKAO_REST_KEY || ''),
             'process.env.VWORLD_API_KEY': JSON.stringify(dotenv.VWORLD_API_KEY || process.env.VWORLD_API_KEY || ''),
         }),
@@ -67,6 +66,13 @@ module.exports = {
         open: false,
         historyApiFallback: true,
         proxy: [
+            {
+                context: ['/api/gemini'],
+                target: 'https://generativelanguage.googleapis.com',
+                pathRewrite: { '^/api/gemini': `/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${dotenv.GEMINI_API_KEY || process.env.GEMINI_API_KEY || ''}` },
+                changeOrigin: true,
+                secure: true,
+            },
             {
                 context: ['/kakao-api'],
                 target: 'https://dapi.kakao.com',

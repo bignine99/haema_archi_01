@@ -9,9 +9,9 @@
  * 5. 종합 분석 및 디자인 전략 도출
  */
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+import { useProjectStore } from '@/store/projectStore';
+
 const GEMINI_MODEL = 'gemini-2.5-flash-lite';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
 // ────── 입력 타입 ──────
 export interface SiteAnalysisInput {
@@ -207,6 +207,14 @@ export async function analyzeSite(
   input: SiteAnalysisInput
 ): Promise<SiteAnalysisResult | null> {
   try {
+    const apiKey = useProjectStore.getState().geminiApiKey;
+    if (!apiKey) {
+      console.error('[대지분석] API 키가 입력되지 않았습니다.');
+      return null;
+    }
+
+    const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
     console.log('[대지분석] Gemini AI 분석 시작...', {
       project: input.projectName,
       address: input.address,
