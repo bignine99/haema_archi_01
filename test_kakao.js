@@ -1,0 +1,1 @@
+fetch('http://localhost:3000/kakao-api/v2/local/search/category.json?category_group_code=SC4&x=127.03&y=37.49&radius=500&size=15&sort=distance').then(r => r.status).then(console.log).catch(console.error);

@@ -1,0 +1,16 @@
+{
+    "name": "haema-archi-workspace",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "dev": "npm run dev:all",
+        "dev:frontend": "cd frontend && npm run dev",
+        "dev:3dmass": "cd services/04_3d_mass && npm run dev",
+        "dev:landuse": "cd services/land_use_regulation && python land_use_service.py serve",
+        "dev:all": "concurrently --names \"FRONTEND,3D-MASS,LANDUSE\" --prefix-colors \"cyan,magenta,yellow\" \"npm run dev:frontend\" \"npm run dev:3dmass\" \"npm run dev:landuse\"",
+        "install:all": "cd frontend && npm install --legacy-peer-deps && cd ../services/04_3d_mass && npm install --legacy-peer-deps"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.0"
+    }
+}

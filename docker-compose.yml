@@ -1,76 +1,97 @@
 version: '3.8'
 
-# ============================================================
-# FLEXITY AI Architecture Platform - Docker Compose
-# 현재 활성: frontend (Webpack), gis-service (FastAPI)
-# 추후 추가: regulation-engine, optimization-engine, financial-analyzer
-# ============================================================
-
 services:
-  # ─── Frontend (Webpack + React + Three.js) ───
-  frontend:
+  # 1. API Gateway / 리버스 프록시 (유일하게 외부망 포트 80 노출)
+  nginx-proxy:
+    build:
+      context: ./nginx
+    ports:
+      - "80:80"
+      # - "443:443" # 인증서 적용 시 주석 해제
+    networks:
+      - haema_network
+    depends_on:
+      - dashboard-service
+      - regulation-service
+      - site-analysis-service
+      - 3dmass-service
+    restart: always
+
+  # 2. 과업지시서 분석 모듈 컨테이너 (01_dashboard)
+  dashboard-service:
+    build:
+      context: ./services/01_dashboard
+    expose:
+      - "3000"
+    env_file:
+      - .env
+    networks:
+      - haema_network
+    restart: unless-stopped
+
+  # 3. 법규분석 모듈 컨테이너 (02_regulation)
+  regulation-service:
+    build:
+      context: ./services/02_regulation
+    expose:
+      - "3000"
+    env_file:
+      - .env
+    networks:
+      - haema_network
+    restart: unless-stopped
+
+  # 4. 대지분석 모듈 컨테이너 (03_site_analysis)
+  site-analysis-service:
+    build:
+      context: ./services/03_site_analysis
+    expose:
+      - "3000"
+    env_file:
+      - .env
+    networks:
+      - haema_network
+    restart: unless-stopped
+
+  # 5. 3D 매스 및 시각화 모듈 컨테이너 (04_3d_mass)
+  3dmass-service:
+    build:
+      context: ./services/04_3d_mass
+    expose:
+      - "3000"
+    env_file:
+      - .env
+    networks:
+      - haema_network
+    restart: unless-stopped
+
+  # [기존 Legacy] Frontend 모듈 
+  # (마이그레이션이 완료되기 전까지 기존 frontend 폴더도 함께 유지/테스트 가능)
+  legacy-frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3000:3000" # 개발용 직접 접근 허용
     volumes:
-      - ./frontend/src:/app/src           # HMR - 소스 코드 변경 즉시 반영
-      - ./frontend/index.html:/app/index.html
-      - /app/node_modules                 # node_modules는 컨테이너 내부 것 사용
+      - ./frontend/src:/app/src
     environment:
       - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=true          # Docker 내 파일 감지 (Windows 호환)
-    depends_on:
-      - gis-service
     networks:
-      - flexity-net
+      - haema_network
 
-  # ─── GIS Service (지적도/주소 - FastAPI) ───
+  # [기존 Legacy] GIS 통신용 백엔드 API
   gis-service:
     build:
       context: ./services/gis-service
-      dockerfile: Dockerfile
     ports:
       - "8001:8001"
     environment:
       - VWORLD_API_KEY=${VWORLD_API_KEY}
       - KAKAO_REST_KEY=${KAKAO_REST_KEY}
-    volumes:
-      - ./services/gis-service:/app       # 소스 핫 리로드
     networks:
-      - flexity-net
-
-  # ─── [예정] Regulation Engine (건축 법규 계산) ───
-  # regulation-engine:
-  #   build:
-  #     context: ./services/regulation-engine
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "8002:8002"
-  #   networks:
-  #     - flexity-net
-
-  # ─── [예정] Optimization Engine (매스/볼륨 최적화) ───
-  # optimization-engine:
-  #   build:
-  #     context: ./services/optimization-engine
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "8003:8003"
-  #   networks:
-  #     - flexity-net
-
-  # ─── [예정] Financial Analyzer (사업성 분석) ───
-  # financial-analyzer:
-  #   build:
-  #     context: ./services/financial-analyzer
-  #     dockerfile: Dockerfile
-  #   ports:
-  #     - "8004:8004"
-  #   networks:
-  #     - flexity-net
+      - haema_network
 
 networks:
-  flexity-net:
+  haema_network:
     driver: bridge

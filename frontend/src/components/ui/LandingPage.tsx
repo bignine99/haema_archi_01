@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useProjectStore } from '@/store/projectStore';
 import { KeyRound, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
 
@@ -11,6 +11,17 @@ export default function LandingPage({ onEnter }: LandingPageProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const setStoreApiKey = useProjectStore(s => s.setGeminiApiKey);
+
+    // .env에 GEMINI_API_KEY가 있으면 자동 진입 (개발 편의)
+    useEffect(() => {
+        const envKey = process.env.GEMINI_API_KEY;
+        if (envKey && envKey.startsWith('AIza')) {
+            console.log('[LandingPage] .env에서 Gemini API 키 감지 → 자동 진입');
+            setStoreApiKey(envKey);
+            // React 렌더 사이클 완료 후 안전하게 진입
+            setTimeout(() => onEnter(), 100);
+        }
+    }, []);
 
     const validateApiKey = async (key: string) => {
         try {

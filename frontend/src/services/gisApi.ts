@@ -54,21 +54,35 @@ export interface ParcelResult {
     addr: string;
 }
 
-// ─── WGS84 → 로컬 미터 좌표 변환 ───
-// 서울 기준 (lat ≈ 37.5°): 1° lng ≈ 88,300m, 1° lat ≈ 111,320m
+// ─── WGS84 → 정밀 Web Mercator (EPSG:3857) 좌표 변환 ───
+// 지구 타원체가 아닌 구형 기준 Web Mercator EPSG:3857 공식 (Web 지도 표준 반경)
+export const EARTH_RADIUS = 6378137.0;
 
-function wgs84ToLocalMeters(
+export function wgs84ToMercator(lng: number, lat: number): [number, number] {
+    const latRad = lat * (Math.PI / 180.0);
+    const lngRad = lng * (Math.PI / 180.0);
+    const x = EARTH_RADIUS * lngRad;
+    const y = EARTH_RADIUS * Math.log(Math.tan(Math.PI / 4.0 + latRad / 2.0));
+    return [x, y];
+}
+
+// 단일 절대 원점(Single Absolute Origin) 동기화
+export function wgs84ToLocalMeters(
     coords: [number, number][],
     centerLng: number,
     centerLat: number
 ): [number, number][] {
-    const latToM = 111320;
-    const lngToM = 111320 * Math.cos(centerLat * Math.PI / 180);
+    // 1. 대지의 중심점을 절대 Web Mercator 좌표로 변환하여 기준(Reference Origin)으로 고정
+    const [originX, originY] = wgs84ToMercator(centerLng, centerLat);
 
-    return coords.map(([lng, lat]) => [
-        (lng - centerLng) * lngToM,
-        (lat - centerLat) * latToM,
-    ]);
+    // 2. Web Mercator 스케일 왜곡을 보정하여 "실제 지리적 미터(Real Meters)" 단위 안착
+    const scale = Math.cos(centerLat * (Math.PI / 180.0));
+
+    return coords.map(([lng, lat]) => {
+        const [x, y] = wgs84ToMercator(lng, lat);
+        // Web Mercator 거리 * 스케일 팩터 = 실제 미터
+        return [(x - originX) * scale, (y - originY) * scale];
+    });
 }
 
 // 면적 계산 (Shoelace formula)
@@ -230,16 +244,34 @@ export async function getVworldBuildings(centerLng: number, centerLat: number, r
     const maxX = centerLng + bboxRadius;
     const maxY = centerLat + bboxRadius;
 
-    // VWorld 건물 데이터 레이어 (LT_C_BULD_INFO 또는 LT_C_BULD)
+    // VWorld 건물 데이터 레이어 (안정적인 LT_C_BULD_INFO 롤백)
     const layer = 'LT_C_BULD_INFO';
     const url = `/vworld-api/req/data?service=data&request=GetFeature&data=${layer}&key=${VWORLD_API_KEY}&domain=${window.location.origin}&geomFilter=BBOX(${minX},${minY},${maxX},${maxY})&geometry=true&crs=EPSG:4326&format=json&size=1000`;
 
     try {
         console.log(`[GIS] Vworld 주변 건물 데이터 요청: BBOX 반경 ${radius}m`);
         const res = await fetch(url);
+        const text = await res.text();
+
+        console.log(`[GIS] Vworld API HTTP Status: ${res.status}`);
+        console.log(`[GIS] Vworld API RAW Response (앞부분 500자):`, text.substring(0, 500));
+
         if (!res.ok) return [];
-        const data = await res.json();
+
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            console.error(`[GIS] Vworld JSON Parsing Error`, e);
+            return [];
+        }
+
+        if (data?.response?.status === 'ERROR') {
+            console.error(`[GIS] Vworld API Error Response:`, data.response.error);
+        }
+
         const features = data?.response?.result?.featureCollection?.features;
+        console.log(`[GIS] Vworld API Features count:`, features ? features.length : 0);
 
         if (!features || features.length === 0) return [];
 
@@ -325,6 +357,9 @@ export async function getVworldBuildings(centerLng: number, centerLat: number, r
             const width = Math.abs(pts[1][0] - pts[0][0]) || 10;
             const depth = Math.abs(pts[1][1] - pts[0][1]) || 10;
 
+            const localPolygonCoords = wgs84ToLocalMeters(validCoords, centerLng, centerLat);
+            const polygonCentered = localPolygonCoords.map(([lx, lz]) => [lx - localX, lz - localZ] as [number, number]);
+
             buildings.push({
                 id: `vw_${props.bd_mgt_sn || props.BD_MGT_SN || buildings.length}`,
                 name: bdName,
@@ -341,6 +376,7 @@ export async function getVworldBuildings(centerLng: number, centerLat: number, r
                 use,
                 color,
                 distance: dist,
+                polygon: polygonCentered,
             });
         }
 
@@ -372,6 +408,7 @@ export interface RealBuilding {
     use: 'residential' | 'commercial' | 'office' | 'school' | 'public' | 'mixed' | 'industrial' | 'natural';
     color: string;           // 3D 렌더링 색상
     distance: number;        // 대지 중심에서의 거리 (m)
+    polygon?: [number, number][]; // 실제 건물 외곽선 폴리곤 좌표
 }
 
 // 카카오 카테고리 그룹코드

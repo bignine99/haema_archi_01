@@ -1,32 +1,14 @@
 
-import { useProjectStore, MOCK_PARCELS, type ParcelData } from '@/store/projectStore';
+import { useProjectStore } from '@/store/projectStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    FileText, Award, DollarSign, MapPin, Search, Globe,
-    Loader2, ChevronDown, Compass, Building, Ruler, Calendar,
-    CheckCircle, Upload, BookOpen, PenTool, Package, AlertCircle,
-    Layers, ClipboardList, ArrowRight
+    FileText, Award, DollarSign, MapPin,
+    Building, Ruler, Calendar,
+    CheckCircle, BookOpen, PenTool, Package, AlertCircle,
+    ArrowRight
 } from 'lucide-react';
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { type KakaoAddressResult } from '@/services/gisApi';
+import { useEffect } from 'react';
 import DocumentUploader from '@/components/ui/DocumentUploader';
-
-/* ───── Mini Parcel SVG ───── */
-function ParcelShape({ polygon, size = 28, active = false }: {
-    polygon: [number, number][]; size?: number; active?: boolean;
-}) {
-    const xs = polygon.map(p => p[0]); const ys = polygon.map(p => p[1]);
-    const [minX, maxX, minY, maxY] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
-    const w = maxX - minX || 1; const h = maxY - minY || 1; const pad = 3;
-    const pts = polygon.map(([x, y]) =>
-        `${pad + ((x - minX) / w) * (size - pad * 2)},${pad + ((y - minY) / h) * (size - pad * 2)}`
-    ).join(' ');
-    return (
-        <svg width={size} height={size} className="shrink-0">
-            <polygon points={pts} fill={active ? '#dbeafe' : '#f1f5f9'} stroke={active ? '#3b82f6' : '#94a3b8'} strokeWidth="1.5" />
-        </svg>
-    );
-}
 
 /* ───── SectionCard: 카드 재사용 컴포넌트 ───── */
 function SectionCard({ icon: Icon, iconColor, title, children, className = '' }: {
@@ -148,48 +130,8 @@ interface DashboardProps {
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
     const store = useProjectStore();
-    const [searchQuery, setSearchQuery] = useState(store.address || '');
-    const [kakaoResults, setKakaoResults] = useState<KakaoAddressResult[]>([]);
-    const [isSearching, setIsSearching] = useState(false);
-    const [showDropdown, setShowDropdown] = useState(false);
-    const [showParcelList, setShowParcelList] = useState(false);
-    const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => { store.recalculate(); }, []);
-    useEffect(() => { if (store.address && !searchQuery) setSearchQuery(store.address); }, [store.address]);
-
-    const executeSearch = useCallback(async () => {
-        if (!searchQuery.trim()) return;
-        setIsSearching(true);
-        try {
-            const results = await store.searchRealAddress(searchQuery);
-            setKakaoResults(results);
-            setShowDropdown(results.length > 0);
-        } catch { }
-        setIsSearching(false);
-    }, [searchQuery, store]);
-
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') { e.preventDefault(); executeSearch(); }
-    };
-    const handleSelectKakaoResult = async (result: KakaoAddressResult) => {
-        setShowDropdown(false); setSearchQuery(result.address_name);
-        await store.loadRealParcel(result);
-        onNavigate?.('3dmass');
-    };
-    const handleSelectParcel = (parcel: ParcelData) => {
-        store.selectParcel(parcel.id);
-        setSearchQuery(store.documentInfo ? store.address : parcel.address);
-        onNavigate?.('3dmass');
-    };
-
-    useEffect(() => {
-        const handler = (e: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setShowDropdown(false);
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, []);
 
     const hasDoc = !!store.documentInfo;
     const doc = store.documentInfo;
@@ -200,7 +142,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             transition={{ duration: 0.5, ease: 'easeOut', delay: 0.1 }}
             className="w-full h-full overflow-y-auto overflow-x-hidden p-6 pb-10 flex flex-col gap-4 custom-scrollbar"
         >
-            {/* ═══ 프로젝트 헤더 (전체 너비) ═══ */}
+            {/* ═══ 프로젝트 헤더 (전체 너비) — 업로드 버튼 포함 ═══ */}
             <div className="flex items-center gap-3 mb-1">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-400 to-amber-500 flex items-center justify-center font-bold text-white text-lg shrink-0 shadow-lg">H</div>
                 <div className="min-w-0 flex-1">
@@ -212,90 +154,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                         <CheckCircle size={10} /> 과업지시서 적용
                     </span>
                 )}
-            </div>
-
-            {/* ═══════ ROW 1: 주소검색 | 과업지시서 업로드 ═══════ */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* 좌: 주소검색 */}
-                <div className="glass-panel p-4 relative" style={{ zIndex: 100 }} ref={dropdownRef}>
-                    <div className="flex items-center gap-2 mb-3">
-                        <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                            <Search size={14} className="text-blue-600" />
-                        </div>
-                        <h3 className="text-[13px] font-bold text-slate-800">주소 검색</h3>
-                    </div>
-                    <div className="flex gap-2">
-                        <div className="flex-1 relative">
-                            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 z-10" />
-                            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                className="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-3 py-2 text-[11px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400/20 transition-all"
-                                placeholder="주소 입력 후 Enter" />
-                        </div>
-                        <button onClick={executeSearch} disabled={isSearching || !searchQuery.trim()}
-                            className="px-3 py-2 rounded-lg font-semibold text-[11px] text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 disabled:opacity-40 transition-all flex items-center gap-1 shrink-0 shadow-md">
-                            {isSearching ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />} 검색
-                        </button>
-                    </div>
-
-                    {/* 예시 필지 */}
-                    <div className="mt-2 pt-2 border-t border-slate-100">
-                        <button onClick={() => setShowParcelList(!showParcelList)} className="w-full flex items-center gap-1.5 text-[10px] text-slate-500 hover:text-slate-700">
-                            <Compass size={10} className="text-green-500" />
-                            <span>예시 필지 ({MOCK_PARCELS.length}건)</span>
-                            <ChevronDown size={10} className={`ml-auto transition-transform ${showParcelList ? 'rotate-180' : ''}`} />
-                        </button>
-                        <AnimatePresence>
-                            {showParcelList && (
-                                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
-                                    exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
-                                    <div className="space-y-1 mt-2">
-                                        {MOCK_PARCELS.map(p => {
-                                            const isActive = store.selectedParcelId === p.id;
-                                            return (
-                                                <button key={p.id} onClick={() => handleSelectParcel(p)}
-                                                    className={`w-full text-left p-2 rounded-lg text-[10px] transition-all flex items-center gap-2 ${isActive ? 'bg-blue-50 border border-blue-300' : 'bg-slate-50 hover:bg-slate-100'}`}>
-                                                    <ParcelShape polygon={p.polygon} active={isActive} size={24} />
-                                                    <div className="min-w-0 flex-1">
-                                                        <div className="font-semibold text-slate-800 truncate">{p.address.split(' ').slice(1).join(' ')}</div>
-                                                        <span className="text-[9px] text-slate-500">{p.landArea}㎡ · {p.shapeLabel}</span>
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-                    </div>
-
-                    {/* 카카오 검색 결과 드롭다운 */}
-                    <AnimatePresence>
-                        {showDropdown && kakaoResults.length > 0 && (
-                            <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                                className="absolute left-4 right-4 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-2xl max-h-[220px] overflow-y-auto"
-                                style={{ zIndex: 9999, top: '82px' }}>
-                                <div className="px-3 py-1 border-b border-slate-100">
-                                    <span className="text-[9px] text-blue-600 font-semibold">카카오 검색 결과 ({kakaoResults.length}건)</span>
-                                </div>
-                                {kakaoResults.map((r, i) => (
-                                    <button key={i} onClick={() => handleSelectKakaoResult(r)}
-                                        className="w-full text-left px-3 py-2 text-[11px] hover:bg-blue-50 transition-colors border-b border-slate-100 last:border-0">
-                                        <div className="flex items-center gap-2">
-                                            <Globe size={10} className="text-green-600 shrink-0" />
-                                            <span className="text-slate-800 font-medium">{r.address_name}</span>
-                                        </div>
-                                    </button>
-                                ))}
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
-
-                {/* 우: 과업지시서 업로드 */}
-                <div className="glass-panel p-4">
-                    <DocumentUploader compact />
-                </div>
+                <DocumentUploader inline />
             </div>
 
             {/* ═══════ ROW 2: 과업개요 | 면적 및 규모 ═══════ */}

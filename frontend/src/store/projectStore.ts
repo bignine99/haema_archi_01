@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { searchKakaoAddress, getVworldParcel, fetchSurroundingBuildings, type KakaoAddressResult, type ParcelResult, type RealBuilding } from '@/services/gisApi';
 import { calculateMaxEnvelope, ZONE_REGULATIONS, type MaxEnvelopeResult, type SetbackResult } from '@/services/regulationEngine';
 import { type ParsedProjectData } from '@/services/documentParser';
+import { fetchLandUseRegulation, type LandUseRegulationResult } from '@/services/landUseService';
+import { type SiteParameters } from '@/services/siteParameterService';
 
 // ─── 건축 용도 타입 ───
 export type BuildingUse =
@@ -52,6 +54,7 @@ export interface NearbyBuilding {
     floors: number;
     use: 'residential' | 'commercial' | 'office' | 'mixed' | 'parking';
     color?: string;
+    polygon?: [number, number][]; // 건물의 실제 형태 폴리곤 (로컬 미터 기준, 건물 중심으로부터의 상대 좌표)
 }
 
 export interface RoadSegment {
@@ -258,6 +261,16 @@ export interface ProjectState {
     polygonWGS84: [number, number][] | null;
     realSurroundingBuildings: RealBuilding[];
 
+    // 토지이용규제 API 데이터
+    landUseRegulation: LandUseRegulationResult | null;
+    landUseLoading: boolean;
+    landUseError: string | null;
+
+    // SiteParameters (정량적 설계 파라미터)
+    siteParameters: SiteParameters | null;
+    siteParamsLoading: boolean;
+    siteParamsError: string | null;
+
     // Step 3: 법규 엔진
     maxEnvelope: MaxEnvelopeResult | null;
     showMaxEnvelope: boolean;
@@ -280,6 +293,10 @@ export interface ProjectState {
     searchRealAddress: (query: string) => Promise<KakaoAddressResult[]>;
     loadRealParcel: (kakaoResult: KakaoAddressResult) => Promise<void>;
     updateFromDocument: (fileName: string, parsedData: ParsedProjectData) => void;
+    fetchLandUseData: (address: string) => Promise<void>;
+    setSiteParameters: (params: SiteParameters | null) => void;
+    setSiteParamsLoading: (loading: boolean) => void;
+    setSiteParamsError: (error: string | null) => void;
     recalculate: () => void;
 
     // 사용자 입력 API 키
@@ -393,6 +410,16 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     polygonWGS84: null,
     realSurroundingBuildings: [],
 
+    // 토지이용규제
+    landUseRegulation: null,
+    landUseLoading: false,
+    landUseError: null,
+
+    // SiteParameters
+    siteParameters: null,
+    siteParamsLoading: false,
+    siteParamsError: null,
+
     // Step 3: 법규 엔진
     maxEnvelope: null,
     showMaxEnvelope: true,
@@ -402,6 +429,10 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     isLoading: false,
 
     geminiApiKey: '',
+
+    setSiteParameters: (params) => set({ siteParameters: params }),
+    setSiteParamsLoading: (loading) => set({ siteParamsLoading: loading }),
+    setSiteParamsError: (error) => set({ siteParamsError: error }),
 
     setAddress: (address) => set({ address }),
 
@@ -622,6 +653,42 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
         set((state) => ({ ...state, ...updates }));
         get().recalculate();
+    },
+
+    fetchLandUseData: async (address: string) => {
+        // null 바이트(\x00) 및 제어문자 제거 (PDF 추출 텍스트 등에서 발생)
+        const cleanAddress = address.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').trim();
+        if (!cleanAddress) {
+            set({ landUseError: '유효한 주소를 입력하세요.', landUseLoading: false });
+            return;
+        }
+        console.log('[Store] 토지이용규제 조회 시작:', cleanAddress);
+        set({ landUseLoading: true, landUseError: null });
+        try {
+            const result = await fetchLandUseRegulation(cleanAddress);
+            set({ landUseRegulation: result, landUseLoading: false });
+
+            // API에서 조례 기반 건폐율/용적률이 조회되면 자동 반영
+            const updates: Partial<ProjectState> = {};
+            if (result.max_building_coverage != null && result.max_building_coverage > 0) {
+                updates.buildingCoverageLimit = result.max_building_coverage;
+            }
+            if (result.max_floor_area_ratio != null && result.max_floor_area_ratio > 0) {
+                updates.floorAreaRatioLimit = result.max_floor_area_ratio;
+            }
+            if (result.zone_types && result.zone_types.length > 0) {
+                updates.zoneType = result.zone_types[0]; // 첫번째 용도지역 적용
+            }
+            if (Object.keys(updates).length > 0) {
+                set(updates);
+                get().recalculate();
+            }
+
+            console.log('[Store] 토지이용규제 데이터 로드 완료:', result);
+        } catch (err: any) {
+            console.error('[Store] 토지이용규제 조회 실패:', err);
+            set({ landUseError: err.message || '토지이용규제 조회 실패', landUseLoading: false });
+        }
     },
 
     recalculate: () => {

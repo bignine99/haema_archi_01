@@ -354,40 +354,52 @@ function SurroundingBuildings({ context }: { context: SiteContext }) {
         <group>
             {context.buildings.map((b) => {
                 const color = b.color || BUILDING_USE_COLORS[b.use] || '#e2e8f0';
+
+                const shape = useMemo(() => {
+                    if (!b.polygon || b.polygon.length < 3) return null;
+                    const pts = b.polygon.map(([x, y]) => new THREE.Vector2(x, y));
+                    return new THREE.Shape(pts);
+                }, [b.polygon]);
+
                 return (
                     <group key={b.id} position={[b.x, 0, -b.z]}>
                         {/* 건물 매스 */}
-                        <mesh position={[0, b.height / 2, 0]} castShadow receiveShadow>
-                            <boxGeometry args={[b.width, b.height, b.depth]} />
-                            <meshStandardMaterial
-                                color={color}
-                                roughness={0.85}
-                                metalness={0.05}
-                            />
-                        </mesh>
-
-                        {/* 층 분리선 (3층 이상) */}
-                        {b.floors >= 3 && Array.from({ length: Math.min(b.floors - 1, 15) }, (_, i) => {
-                            const lineY = (i + 1) * (b.height / b.floors);
-                            return (
-                                <Line
-                                    key={`fl-${i}`}
-                                    points={[
-                                        [-b.width / 2 - 0.02, lineY, b.depth / 2 + 0.02] as [number, number, number],
-                                        [b.width / 2 + 0.02, lineY, b.depth / 2 + 0.02] as [number, number, number],
-                                    ]}
-                                    color="#b0b8c4"
-                                    lineWidth={0.5}
-                                />
-                            );
-                        })}
-
-                        {/* 옥상 디테일 (높은 건물) */}
-                        {b.height > 20 && (
-                            <mesh position={[b.width * 0.15, b.height + 1.2, -b.depth * 0.1]} castShadow>
-                                <boxGeometry args={[b.width * 0.3, 2.4, b.depth * 0.25]} />
-                                <meshStandardMaterial color="#94a3b8" roughness={0.9} />
+                        {shape ? (
+                            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 50, 0]} castShadow receiveShadow>
+                                <extrudeGeometry args={[shape, { depth: b.height, bevelEnabled: false }]} />
+                                <meshBasicMaterial color="red" wireframe={true} />
                             </mesh>
+                        ) : (
+                            <>
+                                <mesh position={[0, b.height / 2 + 50, 0]} castShadow receiveShadow>
+                                    <boxGeometry args={[b.width, b.height, b.depth]} />
+                                    <meshBasicMaterial color="red" wireframe={true} />
+                                </mesh>
+
+                                {/* 층 분리선 (3층 이상) - 박스 형태에만 표시 */}
+                                {b.floors >= 3 && Array.from({ length: Math.min(b.floors - 1, 15) }, (_, i) => {
+                                    const lineY = (i + 1) * (b.height / b.floors);
+                                    return (
+                                        <Line
+                                            key={`fl-${i}`}
+                                            points={[
+                                                [-b.width / 2 - 0.02, lineY, b.depth / 2 + 0.02] as [number, number, number],
+                                                [b.width / 2 + 0.02, lineY, b.depth / 2 + 0.02] as [number, number, number],
+                                            ]}
+                                            color="#b0b8c4"
+                                            lineWidth={0.5}
+                                        />
+                                    );
+                                })}
+
+                                {/* 옥상 디테일 (높은 건물) - 박스 형태에만 표시 */}
+                                {b.height > 20 && (
+                                    <mesh position={[b.width * 0.15, b.height + 1.2, -b.depth * 0.1]} castShadow>
+                                        <boxGeometry args={[b.width * 0.3, 2.4, b.depth * 0.25]} />
+                                        <meshStandardMaterial color="#94a3b8" roughness={0.9} />
+                                    </mesh>
+                                )}
+                            </>
                         )}
                     </group>
                 );
@@ -528,16 +540,37 @@ function UrbanGroundPlane() {
     const centerLat = useProjectStore(s => s.centerLat);
     const [texture, setTexture] = useState<THREE.Texture | null>(null);
 
-    // VWorld API Parameter
-    const size = 1024;
-    const zoom = 15; // 줌 레벨 15: 약 2km x 2km 커버 (주변 500m 반경 이상 충분히 포함)
-    const key = process.env.VWORLD_API_KEY || 'B8385331-2B58-3CEF-9209-33CB9AFD68A6';
+    // 지면의 크기 (실제 미터 기준, 1:1 매칭)
+    const planeSize = 2000;
 
-    // basemap=PHOTO 로 설정하여 실제 위성사진 적용 (도로, 하천, 녹지 등이 현실감 있게 표현됨)
-    const url = `/vworld-api/req/image?service=image&request=getmap&key=${key}&basemap=PHOTO&center=${centerLng},${centerLat}&zoom=${zoom}&size=${size},${size}&crs=epsg:4326&domain=${window.location.origin}`;
+    // VWorld API BBOX 정밀 생성
+    const url = useMemo(() => {
+        if (!centerLng || !centerLat) return '';
+
+        const key = process.env.VWORLD_API_KEY || 'B8385331-2B58-3CEF-9209-33CB9AFD68A6';
+        const EARTH_RADIUS = 6378137.0;
+
+        // 1. 대지 중심의 절대 EPSG:3857 좌표
+        const latRad = centerLat * (Math.PI / 180.0);
+        const lngRad = centerLng * (Math.PI / 180.0);
+        const originX = EARTH_RADIUS * lngRad;
+        const originY = EARTH_RADIUS * Math.log(Math.tan(Math.PI / 4.0 + latRad / 2.0));
+
+        // 2. Real Meters 반경 -> Web Mercator 반경 (역 스케일 팩터)
+        const scale = Math.cos(latRad);
+        const mercatorRadius = (planeSize / 2) / scale;
+
+        const minX = originX - mercatorRadius;
+        const minY = originY - mercatorRadius;
+        const maxX = originX + mercatorRadius;
+        const maxY = originY + mercatorRadius;
+
+        // BBOX=minX,minY,maxX,maxY (정밀한 EPSG:3857 Bounding Box)
+        return `/vworld-api/req/image?service=image&request=getmap&key=${key}&basemap=PHOTO&bbox=${minX},${minY},${maxX},${maxY}&size=1024,1024&crs=epsg:3857&domain=${window.location.origin}`;
+    }, [centerLng, centerLat]);
 
     useEffect(() => {
-        if (!centerLng || !centerLat) {
+        if (!url) {
             setTexture(null);
             return;
         }
@@ -545,28 +578,26 @@ function UrbanGroundPlane() {
         console.log(`[UrbanGroundPlane] Fetching satellite texture (PHOTO), url: ${url}`);
 
         const loader = new THREE.TextureLoader();
-        // 크로스 오리진 설정 (프록시 우회 또는 외부 직접 접근 시 대비)
         loader.setCrossOrigin('anonymous');
 
         loader.load(url, (tex) => {
             console.log(`[UrbanGroundPlane] Texture loaded successfully.`);
             tex.colorSpace = THREE.SRGBColorSpace;
-            tex.minFilter = THREE.LinearFilter; // 픽셀화 방지, 부드러운 텍스처
-            tex.needsUpdate = true; // WebGL GPU 업로드 강제
+            tex.minFilter = THREE.LinearFilter;
+            tex.generateMipmaps = false;
+            tex.needsUpdate = true;
             setTexture(tex);
         }, undefined, (err) => {
             console.warn('[3D] 위성 이미지 로드 실패:', err);
             setTexture(null);
         });
-    }, [centerLng, centerLat, url]);
-
-    // zoom 15, size 1024 해상도에 맞는 지리적 범위 (약 2.5km)를 planeSize로 지정
-    const planeSize = 2500;
+    }, [url]);
 
     return (
         <group>
-            {/* 500M 반경 이상을 품는 광역 위성 지면 */}
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
+            {/* 1:1 스케일 매칭: planeGeometry args를 실제 물리적 거리와 정밀 일치 */}
+            {/* Y축 고도 안착: 건물 렌더링 시작점과 맞물리도록 정확히 0 에 안착 */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
                 <planeGeometry args={[planeSize, planeSize]} />
                 {texture ? (
                     <meshBasicMaterial map={texture} color="#ffffff" side={THREE.DoubleSide} />
@@ -596,21 +627,32 @@ function SiteContextLayer() {
         if (realBuildings && realBuildings.length > 0) {
             console.log(`[3D] 실제 주변 건물 ${realBuildings.length}개 렌더링`);
 
-            const buildings: NearbyBuilding[] = realBuildings.map(rb => ({
-                id: rb.id,
-                x: rb.x,
-                z: rb.z,
-                width: rb.width,
-                depth: rb.depth,
-                height: rb.height,
-                floors: rb.floors,
-                use: rb.use === 'school' ? 'residential' :
-                    rb.use === 'public' ? 'office' :
-                        rb.use === 'industrial' ? 'mixed' :
-                            rb.use === 'natural' ? 'residential' :
-                                rb.use as any,
-                color: rb.color,
-            }));
+            const buildings: NearbyBuilding[] = realBuildings.map(rb => {
+                let poly = rb.polygon;
+                // 폴리곤 방향성 교정: Clockwise인 경우 ExtrudeGeometry가 안쪽 면을 뒤집을 수 있으므로 뒤집어 줌.
+                if (poly && poly.length >= 3) {
+                    const vecPts = poly.map(([x, y]) => new THREE.Vector2(x, y));
+                    if (THREE.ShapeUtils.isClockWise(vecPts)) {
+                        poly = [...poly].reverse();
+                    }
+                }
+                return {
+                    id: rb.id,
+                    x: rb.x,
+                    z: rb.z,
+                    width: rb.width,
+                    depth: rb.depth,
+                    height: rb.height,
+                    floors: rb.floors,
+                    use: rb.use === 'school' ? 'residential' :
+                        rb.use === 'public' ? 'office' :
+                            rb.use === 'industrial' ? 'mixed' :
+                                rb.use === 'natural' ? 'residential' :
+                                    rb.use as any,
+                    color: rb.color,
+                    polygon: poly,
+                };
+            });
 
             return {
                 buildings,
@@ -668,7 +710,6 @@ function MaxEnvelopeVisualization() {
     const showMaxEnvelope = useProjectStore(s => s.showMaxEnvelope);
     const maxEnvelope = useProjectStore(s => s.maxEnvelope);
     const polygon = useProjectStore(s => s.landPolygon);
-    const northAngle = useProjectStore(s => s.northAngle);
 
     // 대지 중심점 기반 좌표 변환
     const { center, centeredLandPts } = useMemo(() => {
@@ -825,7 +866,7 @@ function MaxEnvelopeVisualization() {
     const envH = maxEnvelope.effectiveMaxHeight;
 
     return (
-        <group rotation={[0, (northAngle * Math.PI) / 180, 0]}>
+        <group>
             {/* ── 건축가능영역 바닥면 (후퇴 적용) ── */}
             {centeredBuildable.length >= 3 && (
                 <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>

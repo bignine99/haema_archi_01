@@ -134,25 +134,24 @@ export default function App() {
     const geminiApiKey = useProjectStore(s => s.geminiApiKey);
     const setGeminiApiKey = useProjectStore(s => s.setGeminiApiKey);
 
-    // 3D 매스 전용 뷰 (패널 제거, 3D 화면만 풀스크린)
+    // 3D 매스 전용 뷰 (패널 제거, 3D 화면만 풀스크린 - MSA 컨테이너 연동)
     const render3DMassView = () => (
         <div className="h-full w-full relative overflow-hidden bg-slate-50">
-            <Suspense fallback={<LoadingSpinner />}>
-                <SceneViewer />
-            </Suspense>
+            {/* MSA 분리된 컨테이너를 Iframe으로 통합 */}
+            <iframe
+                src="http://localhost:3004"
+                title="3D Mass MSA Container"
+                className="w-full h-full border-0 absolute inset-0 z-0"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+            />
 
-            {/* 2D 지도 패널 (좌하단 플로팅) */}
-            <MapPanel />
-
-
-
-            {/* 하단 축척 바 */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 glass-panel px-6 py-2 flex items-center gap-4 z-10 shadow-sm border border-white/40">
+            {/* 하단 축척 바 (메인 Host 껍데기 UI에 유지) */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 glass-panel px-6 py-2 flex items-center gap-4 z-10 shadow-sm border border-slate-300 pointer-events-none bg-white/80 backdrop-blur-md rounded-full">
                 <div className="flex items-center gap-2">
                     <div className="w-16 h-[2px] bg-slate-400" />
                     <span className="text-[10px] text-slate-600 font-medium">10m</span>
                 </div>
-                <span className="text-[11px] text-slate-600 font-medium">Phase 1-C · Site Context</span>
+                <span className="text-[11px] text-slate-600 font-medium whitespace-nowrap">MSA Container: 04_3d_mass</span>
             </div>
         </div>
     );

@@ -4,7 +4,7 @@ import { UploadCloud, FileText, CheckCircle2, AlertCircle, X, Loader2 } from 'lu
 import { useProjectStore } from '@/store/projectStore';
 import { parseDocument } from '@/services/documentParser';
 
-export default function DocumentUploader({ compact = false }: { compact?: boolean }) {
+export default function DocumentUploader({ compact = false, inline = false }: { compact?: boolean; inline?: boolean }) {
     const store = useProjectStore();
     const [isDragging, setIsDragging] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -43,6 +43,44 @@ export default function DocumentUploader({ compact = false }: { compact?: boolea
             if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
+
+    // ███ Inline 모드: 헤더 바에 삽입 가능한 콤팩트 버튼 ███
+    if (inline) {
+        return (
+            <div className="relative shrink-0">
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept=".pdf,.txt"
+                    className="hidden"
+                />
+                <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isLoading}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all shadow-sm ${isLoading
+                            ? 'bg-blue-100 text-blue-500 cursor-wait'
+                            : success
+                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                                : error
+                                    ? 'bg-red-100 text-red-700 border border-red-200'
+                                    : 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300'
+                        }`}
+                >
+                    {isLoading ? (
+                        <Loader2 size={12} className="animate-spin" />
+                    ) : success ? (
+                        <CheckCircle2 size={12} />
+                    ) : error ? (
+                        <AlertCircle size={12} />
+                    ) : (
+                        <UploadCloud size={12} />
+                    )}
+                    {isLoading ? '분석 중...' : success ? '적용 완료' : error ? '오류' : '과업지시서'}
+                </button>
+            </div>
+        );
+    }
 
     return (
         <div className={compact ? 'relative overflow-visible' : 'glass-panel p-5 mb-4 relative overflow-visible group'}>

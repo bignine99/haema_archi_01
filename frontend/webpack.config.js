@@ -56,12 +56,13 @@ module.exports = {
         }),
         // 환경변수를 빌드 시 코드에 주입 (API 키를 소스코드에 넣지 않음)
         new webpack.DefinePlugin({
+            'process.env.GEMINI_API_KEY': JSON.stringify(dotenv.GEMINI_API_KEY || process.env.GEMINI_API_KEY || ''),
             'process.env.KAKAO_REST_KEY': JSON.stringify(dotenv.KAKAO_REST_KEY || process.env.KAKAO_REST_KEY || ''),
             'process.env.VWORLD_API_KEY': JSON.stringify(dotenv.VWORLD_API_KEY || process.env.VWORLD_API_KEY || ''),
         }),
     ],
     devServer: {
-        port: 3000,
+        port: 3001,
         hot: true,
         open: false,
         historyApiFallback: true,
@@ -96,6 +97,17 @@ module.exports = {
                 onProxyRes: function (proxyRes, req, res) {
                     proxyRes.headers['Access-Control-Allow-Origin'] = '*';
                 }
+            },
+            {
+                context: ['/land-use-api'],
+                target: 'http://localhost:8010',
+                pathRewrite: { '^/land-use-api': '' },
+                changeOrigin: true,
+            },
+            {
+                context: ['/api/land-use', '/api/pnu', '/api/zone-limits', '/api/fc', '/api/site'],
+                target: 'http://localhost:8010',
+                changeOrigin: true,
             },
         ],
     },
