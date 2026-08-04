@@ -5,10 +5,6 @@
     "framework": null,
     "rewrites": [
         {
-            "source": "/kakao-api/(.*)",
-            "destination": "https://dapi.kakao.com/$1"
-        },
-        {
             "source": "/vworld-api/(.*)",
             "destination": "https://api.vworld.kr/$1"
         }

@@ -54,10 +54,13 @@ module.exports = {
         new HtmlWebpackPlugin({
             template: './index.html',
         }),
-        // 환경변수를 빌드 시 코드에 주입 (API 키를 소스코드에 넣지 않음)
+        // ⚠ DefinePlugin 은 빌드 시 '문자열 치환' 이다. 환경변수로 넣어도 번들 .js 에 값이 남는다.
+        //    「소스코드에 넣지 않으니 안전하다」가 통하지 않는 자리였다 — 배포본에서 실측 확인.
+        //    Gemini : 앱이 사용자에게 키를 입력받으므로 주입 자체가 불필요하다. 제거.
+        //    Kakao  : REST 키는 도메인 제한이 없다. /api/kakao 프록시로 옮겼다. 제거.
+        //    VWorld : 지도 타일 URL 에 들어가 프록시가 부적합하다. 대신 VWorld 콘솔에서
+        //             도메인을 등록해 그 도메인에서만 동작하게 막는다(요청에 domain= 을 이미 보낸다).
         new webpack.DefinePlugin({
-            'process.env.GEMINI_API_KEY': JSON.stringify(dotenv.GEMINI_API_KEY || process.env.GEMINI_API_KEY || ''),
-            'process.env.KAKAO_REST_KEY': JSON.stringify(dotenv.KAKAO_REST_KEY || process.env.KAKAO_REST_KEY || ''),
             'process.env.VWORLD_API_KEY': JSON.stringify(dotenv.VWORLD_API_KEY || process.env.VWORLD_API_KEY || ''),
         }),
     ],
@@ -67,13 +70,6 @@ module.exports = {
         open: false,
         historyApiFallback: true,
         proxy: [
-            {
-                context: ['/api/gemini'],
-                target: 'https://generativelanguage.googleapis.com',
-                pathRewrite: { '^/api/gemini': `/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${dotenv.GEMINI_API_KEY || process.env.GEMINI_API_KEY || ''}` },
-                changeOrigin: true,
-                secure: true,
-            },
             {
                 context: ['/kakao-api'],
                 target: 'https://dapi.kakao.com',

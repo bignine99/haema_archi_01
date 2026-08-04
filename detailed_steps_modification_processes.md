@@ -1216,7 +1216,7 @@ interface SiteAnalysisResult {
 | 🟢 Vworld | `B8385331...` | 정상 | 영향 없음 |
 
 #### 해결 조치
-1. **새 Gemini API 키 발급**: `AIzaSyBpjTpY-pvfpbUovwKES2WGD7ejDu02bKk`
+1. **새 Gemini API 키 발급**: `$GEMINI_API_KEY`
 2. **모든 하드코딩 API 키 제거** → `process.env` 환경변수로 교체
 3. **`webpack.config.js`에 `webpack.DefinePlugin` 추가** — .env → 빌드 시 주입
 4. **로컬 `frontend/.env` 파일 생성** (Git에 포함되지 않음)
@@ -1652,7 +1652,7 @@ python land_use_service.py serve
 ### 2. VWorld API 키 재발급 — INCORRECT_KEY 근본 해결
 
 #### 2-1. 문제 진단
-- 기존 키 `B8385331-2B58-3CEF-9209-33CB9AFD68A6`가 VWorld 마이포탈에 등록되어 있지 않음 (총 0건)
+- 기존 키 `$VWORLD_API_KEY`가 VWorld 마이포탈에 등록되어 있지 않음 (총 0건)
 - VWorld Data API(`LT_C_SPBD`) 호출 시 모든 도메인에서 `"인증키 정보가 올바르지 않습니다"` 에러 반환
 - 위성사진 타일은 도메인 검증이 덜 엄격하여 작동했으나, **건물 폴리곤 Data API는 엄격한 도메인 검증** 적용
 
@@ -1669,7 +1669,7 @@ python land_use_service.py serve
 
 #### 2-3. .env 업데이트
 ```diff
-- VWORLD_API_KEY=B8385331-2B58-3CEF-9209-33CB9AFD68A6
+- VWORLD_API_KEY=$VWORLD_API_KEY
 + VWORLD_API_KEY=34F345CA-9827-3F0D-9742-DA1B5B1CD364
 ```
 
