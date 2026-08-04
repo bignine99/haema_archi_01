@@ -5,7 +5,7 @@ async function testWFS() {
     const maxY = 37.49 + 0.005;
 
     const layer = 'LT_C_BULD_INFO';
-    const key = 'B8385331-2B58-3CEF-9209-33CB9AFD68A6';
+    const key = '${process.env.VWORLD_API_KEY}';
     const url = `http://api.vworld.kr/req/data?service=data&request=GetFeature&data=${layer}&key=${key}&domain=http://localhost:3000&geomFilter=BBOX(${minX},${minY},${maxX},${maxY})&geometry=true&crs=EPSG:4326&format=json&size=10`;
 
     try {

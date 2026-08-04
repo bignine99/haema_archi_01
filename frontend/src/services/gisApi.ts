@@ -7,7 +7,7 @@
  *   3. 좌표 변환: WGS84(도) → 로컬 미터(m) → 3D 렌더링
  */
 
-const KAKAO_REST_KEY = process.env.KAKAO_REST_KEY || '';
+// KAKAO_REST_KEY 는 더 이상 브라우저에 오지 않는다. /api/kakao 가 서버에서 붙인다.
 const VWORLD_API_KEY = process.env.VWORLD_API_KEY || '';
 
 const BUILDING_USE_COLORS: Record<string, string> = {
@@ -102,10 +102,9 @@ function computeArea(pts: [number, number][]): number {
 export async function searchKakaoAddress(query: string): Promise<KakaoAddressResult[]> {
     if (!query.trim()) return [];
 
-    const url = `/kakao-api/v2/local/search/address.json?query=${encodeURIComponent(query)}&size=5`;
+    const url = `/api/kakao/v2/local/search/address.json?query=${encodeURIComponent(query)}&size=5`;
 
     const res = await fetch(url, {
-        headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
     });
 
     if (!res.ok) {
@@ -440,10 +439,9 @@ async function kakaoKeywordSearch(
     radius: number = 500
 ): Promise<any[]> {
     try {
-        const url = `/kakao-api/v2/local/search/keyword.json?query=${encodeURIComponent(keyword)}&x=${lng}&y=${lat}&radius=${radius}&size=15&sort=distance`;
+        const url = `/api/kakao/v2/local/search/keyword.json?query=${encodeURIComponent(keyword)}&x=${lng}&y=${lat}&radius=${radius}&size=15&sort=distance`;
         const res = await fetch(url, {
-            headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
-        });
+            });
         if (!res.ok) return [];
         const data = await res.json();
         return data.documents || [];
@@ -459,10 +457,9 @@ async function kakaoCategorySearch(
     radius: number = 500
 ): Promise<any[]> {
     try {
-        const url = `/kakao-api/v2/local/search/category.json?category_group_code=${categoryGroup}&x=${lng}&y=${lat}&radius=${radius}&size=15&sort=distance`;
+        const url = `/api/kakao/v2/local/search/category.json?category_group_code=${categoryGroup}&x=${lng}&y=${lat}&radius=${radius}&size=15&sort=distance`;
         const res = await fetch(url, {
-            headers: { 'Authorization': `KakaoAK ${KAKAO_REST_KEY}` },
-        });
+            });
         if (!res.ok) return [];
         const data = await res.json();
         return data.documents || [];

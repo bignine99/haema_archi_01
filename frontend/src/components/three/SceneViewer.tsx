@@ -547,7 +547,7 @@ function UrbanGroundPlane() {
     const url = useMemo(() => {
         if (!centerLng || !centerLat) return '';
 
-        const key = process.env.VWORLD_API_KEY || 'B8385331-2B58-3CEF-9209-33CB9AFD68A6';
+        const key = process.env.VWORLD_API_KEY || '';
         const EARTH_RADIUS = 6378137.0;
 
         // 1. 대지 중심의 절대 EPSG:3857 좌표

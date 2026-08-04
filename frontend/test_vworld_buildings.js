@@ -1,7 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 
-const key = 'B8385331-2B58-3CEF-9209-33CB9AFD68A6';
+const key = '${process.env.VWORLD_API_KEY}';
 // 500m 반경 정도의 BBOX 설정
 const minX = 127.030;
 const minY = 37.495;
